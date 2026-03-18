@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AAA Finance - Acesso</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#070611;
+      --bg-soft:#0d0a1c;
+      --panel:#120d23;
+      --panel-2:#17112c;
+      --line:rgba(255,255,255,.08);
+      --line-soft:rgba(255,255,255,.05);
+      --text:#f5f3ff;
+      --muted:#b7afcb;
+      --primary:#8b5cf6;
+      --primary-2:#6d28d9;
+      --primary-soft:rgba(139,92,246,.18);
+      --danger:#ef4444;
+      --success:#22c55e;
+      --welcome-1:#4d006a;
+      --welcome-2:#8f007d;
+      --welcome-3:#dd008f;
+      --welcome-4:#ff4ca6;
+      --radius:30px;
+      --radius-2:18px;
+      --shadow:0 24px 60px rgba(0,0,0,.35);
+    }
+
+    *{box-sizing:border-box}
+
+    html,body{
+      margin:0;
+      padding:0;
+      min-height:100%;
+      font-family:"Inter",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(139,92,246,.18), transparent 22%),
+        radial-gradient(circle at bottom right, rgba(109,40,217,.16), transparent 18%),
+        linear-gradient(180deg,#070611 0%, #0a0815 100%);
+      color:var(--text);
+    }
+
+    body{
+      min-height:100vh;
+      overflow-x:hidden;
+    }
+
+    .hidden{display:none !important}
+
+    .page{
+      min-height:100vh;
+      width:100%;
+    }
+
+    .shell{
+      min-height:100vh;
+      display:grid;
+      place-items:center;
+      padding:18px;
+    }
+
+    .container{
+      width:min(1120px,100%);
+      display:grid;
+      gap:18px;
+    }
+
+    .card{
+      background:linear-gradient(180deg,rgba(18,13,35,.96),rgba(13,10,28,.98));
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      backdrop-filter:blur(16px);
+    }
+
+    .welcome-card{
+      position:relative;
+      overflow:hidden;
+      min-height:620px;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      padding:26px;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(255,255,255,.10), transparent 7%),
+        radial-gradient(circle at 78% 16%, rgba(255,255,255,.08), transparent 6%),
+        radial-gradient(circle at 76% 38%, rgba(255,255,255,.11), transparent 10%),
+        radial-gradient(circle at 22% 76%, rgba(255,255,255,.09), transparent 11%),
+        linear-gradient(180deg,var(--welcome-1) 0%, var(--welcome-2) 38%, var(--welcome-3) 74%, var(--welcome-4) 100%);
+      border-color:rgba(255,255,255,.12);
+    }
+
+    .welcome-card::before,
+    .welcome-card::after{
+      content:"";
+      position:absolute;
+      border-radius:50%;
+      pointer-events:none;
+      opacity:.25;
+      background:radial-gradient(circle at top left, rgba(255,255,255,.5), rgba(255,255,255,.06));
+    }
+
+    .welcome-card::before{
+      width:180px;
+      height:180px;
+      left:28px;
+      bottom:28px;
+    }
+
+    .welcome-card::after{
+      width:120px;
+      height:120px;
+      right:36px;
+      top:120px;
+    }
+
+    .welcome-top{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      font-weight:700;
+      font-size:14px;
+      position:relative;
+      z-index:2;
+    }
+
+    .hamb{
+      font-size:30px;
+      line-height:1;
+    }
+
+    .welcome-center{
+      position:relative;
+      z-index:2;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      text-align:center;
+      gap:18px;
+      margin:20px auto;
+      max-width:460px;
+    }
+
+    .hero-avatar{
+      width:186px;
+      height:186px;
+      border-radius:50%;
+      background:#fff;
+      display:grid;
+      place-items:center;
+      box-shadow:0 20px 40px rgba(0,0,0,.24);
+      flex-shrink:0;
+    }
+
+    .hero-avatar::before{
+      content:"";
+      width:90px;
+      height:90px;
+      border-radius:50%;
+      background:#98007e;
+      box-shadow:0 86px 0 18px #98007e;
+      transform:translateY(-24px);
+    }
+
+    .welcome-center h1{
+      margin:0;
+      font-size:clamp(2.5rem,5vw,4rem);
+      letter-spacing:.02em;
+    }
+
+    .welcome-center p{
+      margin:0;
+      line-height:1.65;
+      color:rgba(255,255,255,.94);
+      font-size:15px;
+    }
+
+    .welcome-actions{
+      position:relative;
+      z-index:2;
+      display:grid;
+      gap:12px;
+      width:min(320px,100%);
+      margin:0 auto;
+    }
+
+    .dots{
+      display:flex;
+      justify-content:center;
+      gap:10px;
+      margin-top:22px;
+    }
+
+    .dot{
+      width:11px;
+      height:11px;
+      border-radius:50%;
+      background:rgba(255,255,255,.35);
+    }
+
+    .dot.active{background:#fff}
+
+    .auth-card{
+      padding:26px;
+      width:min(560px,100%);
+      margin:0 auto;
+      display:flex;
+      flex-direction:column;
+      gap:18px;
+      align-self:center;
+      background:linear-gradient(180deg,rgba(14,11,26,.98),rgba(10,8,20,.98));
+    }
+
+    .eyebrow{
+      margin:0 0 6px;
+      color:#d9ceff;
+      font-size:12px;
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.16em;
+    }
+
+    h1,h2,h3,h4,p{margin:0}
+    h2{font-size:clamp(1.6rem,2.4vw,2.1rem)}
+    h3{font-size:1.15rem}
+    .muted{color:var(--muted)}
+
+    .tabs{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+      background:rgba(255,255,255,.04);
+      border:1px solid var(--line-soft);
+      padding:6px;
+      border-radius:999px;
+    }
+
+    .tabs button{
+      border:none;
+      background:transparent;
+      color:var(--muted);
+      font:inherit;
+      font-weight:800;
+      border-radius:999px;
+      padding:12px 14px;
+      cursor:pointer;
+      transition:.18s ease;
+    }
+
+    .tabs button.active{
+      background:linear-gradient(90deg,var(--primary),var(--primary-2));
+      color:#fff;
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);
+    }
+
+    .form{
+      display:grid;
+      gap:12px;
+    }
+
+    label{
+      display:block;
+      font-size:13px;
+      color:var(--muted);
+      font-weight:700;
+      margin-bottom:8px;
+    }
+
+    input{
+      width:100%;
+      border:1px solid rgba(255,255,255,.08);
+      background:#f3f4f6;
+      color:#1f2937;
+      border-radius:14px;
+      padding:14px 14px;
+      outline:none;
+      font:inherit;
+    }
+
+    input:focus{
+      border-color:rgba(139,92,246,.62);
+      box-shadow:0 0 0 4px rgba(139,92,246,.14);
+    }
+
+    .btn{
+      border:none;
+      cursor:pointer;
+      border-radius:16px;
+      padding:14px 18px;
+      font:inherit;
+      font-weight:800;
+      transition:.18s ease;
+    }
+
+    .btn:hover{transform:translateY(-1px)}
+
+    .btn-primary{
+      background:linear-gradient(90deg,var(--primary),var(--primary-2));
+      color:#fff;
+    }
+
+    .btn-welcome{
+      background:linear-gradient(90deg,#ffb703,#ff9800);
+      color:#271000;
+    }
+
+    .btn-ghost{
+      background:rgba(255,255,255,.10);
+      color:#fff;
+      border:1px solid rgba(255,255,255,.12);
+    }
+
+    .btn-danger{
+      background:rgba(239,68,68,.16);
+      color:#ffc4c4;
+      border:1px solid rgba(239,68,68,.24);
+    }
+
+    .status{
+      padding:14px 16px;
+      border-radius:14px;
+      background:rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.06);
+      color:#efe8ff;
+      line-height:1.55;
+      white-space:pre-wrap;
+      min-height:54px;
+    }
+
+    .link-btn{
+      border:none;
+      background:none;
+      color:#cab8ff;
+      font:inherit;
+      font-weight:700;
+      cursor:pointer;
+      padding:0;
+    }
+
+    .auth-footer{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:center;
+      flex-wrap:wrap;
+      font-size:14px;
+      color:var(--muted);
+    }
+
+    .admin-shell{
+      min-height:100vh;
+      padding:18px;
+    }
+
+    .admin-wrap{
+      width:min(1280px,100%);
+      margin:0 auto;
+      display:grid;
+      gap:18px;
+    }
+
+    .admin-card{
+      padding:24px;
+    }
+
+    .admin-top{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:16px;
+      flex-wrap:wrap;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:9px 13px;
+      border-radius:999px;
+      background:rgba(34,197,94,.12);
+      color:#bbf7d0;
+      font-size:13px;
+      font-weight:800;
+    }
+
+    .admin-stats{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+      margin-top:18px;
+    }
+
+    .stat{
+      background:rgba(255,255,255,.04);
+      border:1px solid var(--line);
+      border-radius:20px;
+      padding:16px;
+    }
+
+    .stat span{
+      display:block;
+      color:var(--muted);
+      font-size:13px;
+      margin-bottom:8px;
+    }
+
+    .stat strong{
+      font-size:1.15rem;
+    }
+
+    .admin-grid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:16px;
+      margin-top:18px;
+    }
+
+    .inner{
+      background:rgba(255,255,255,.04);
+      border:1px solid var(--line);
+      border-radius:22px;
+      padding:18px;
+    }
+
+    .chart{
+      display:flex;
+      align-items:flex-end;
+      gap:8px;
+      min-height:240px;
+      margin-top:14px;
+    }
+
+    .bar-wrap{
+      flex:1;
+      min-width:0;
+      display:flex;
+      flex-direction:column;
+      justify-content:flex-end;
+      align-items:center;
+      gap:8px;
+    }
+
+    .bar{
+      width:100%;
+      min-height:12px;
+      border-radius:14px 14px 7px 7px;
+      background:linear-gradient(180deg,var(--primary),#d1008f);
+    }
+
+    .bar-label{
+      color:var(--muted);
+      font-size:12px;
+      text-align:center;
+      line-height:1.35;
+    }
+
+    .user-list{
+      display:grid;
+      gap:10px;
+      margin-top:14px;
+    }
+
+    .user-row{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.06);
+      border-radius:16px;
+      padding:12px 14px;
+    }
+
+    .user-left{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      min-width:0;
+    }
+
+    .avatar{
+      width:46px;
+      height:46px;
+      border-radius:50%;
+      object-fit:cover;
+      background:linear-gradient(135deg,var(--primary),#d1008f);
+      display:grid;
+      place-items:center;
+      color:#fff;
+      font-weight:900;
+      flex-shrink:0;
+    }
+
+    .empty{
+      padding:18px;
+      border:1px dashed rgba(255,255,255,.14);
+      border-radius:16px;
+      color:var(--muted);
+      text-align:center;
+      background:rgba(255,255,255,.02);
+      margin-top:14px;
+    }
+
+    @media (min-width: 980px){
+      .container{
+        grid-template-columns:1fr 1fr;
+        align-items:center;
+      }
+
+      .admin-stats{
+        grid-template-columns:repeat(4,1fr);
+      }
+
+      .admin-grid{
+        grid-template-columns:1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <section id="welcomePage" class="page">
+    <div class="shell">
+      <div class="container">
+        <div id="welcomeCard" class="welcome-card card">
+          <div class="welcome-top">
+            <span>10:10</span>
+            <span class="hamb">☰</span>
+          </div>
+
+          <div class="welcome-center">
+            <div class="hero-avatar"></div>
+            <h1>WELCOME</h1>
+            <p>
+              Seu controle financeiro pessoal com sincronização na nuvem,
+              login seguro e dados vinculados somente à sua conta.
+            </p>
+          </div>
+
+          <div>
+            <div class="welcome-actions">
+              <button id="goToLoginBtn" class="btn btn-welcome">Login</button>
+              <button id="goToRegisterBtn" class="btn btn-ghost">Create account</button>
+            </div>
+
+            <div class="dots">
+              <span class="dot active"></span>
+              <span class="dot"></span>
+              <span class="dot"></span>
+              <span class="dot"></span>
+            </div>
+          </div>
+        </div>
+
+        <div id="authCard" class="auth-card card hidden">
+          <div>
+            <p class="eyebrow">AAA Finance</p>
+            <h2>Acesso à sua conta</h2>
+            <p class="muted" style="margin-top:10px; line-height:1.65;">
+              Entre para continuar no sistema ou crie sua conta em poucos segundos.
+            </p>
+          </div>
+
+          <div class="tabs">
+            <button id="tabLoginBtn" class="active">Entrar</button>
+            <button id="tabRegisterBtn">Criar conta</button>
+          </div>
+
+          <div id="loginPane">
+            <p class="eyebrow">Login</p>
+            <h3>Bem-vindo de volta</h3>
+
+            <div class="form" style="margin-top:14px;">
+              <div>
+                <label for="loginIdentifier">Email ou usuário</label>
+                <input id="loginIdentifier" type="text" placeholder="Seu email ou Admin2026" />
+              </div>
+              <div>
+                <label for="loginPassword">Senha</label>
+                <input id="loginPassword" type="password" placeholder="Sua senha" />
+              </div>
+              <button id="loginBtn" class="btn btn-primary">Entrar</button>
+            </div>
+
+            <div class="auth-footer" style="margin-top:16px;">
+              <span>Esqueceu a senha?</span>
+              <button id="forgotPasswordBtn" class="link-btn">Recuperar acesso</button>
+            </div>
+          </div>
+
+          <div id="registerPane" class="hidden">
+            <p class="eyebrow">Cadastro</p>
+            <h3>Crie sua conta</h3>
+
+            <div class="form" style="margin-top:14px;">
+              <div>
+                <label for="registerName">Nome</label>
+                <input id="registerName" type="text" placeholder="Seu nome" />
+              </div>
+              <div>
+                <label for="registerEmail">Email</label>
+                <input id="registerEmail" type="email" placeholder="voce@email.com" />
+              </div>
+              <div>
+                <label for="registerPassword">Senha</label>
+                <input id="registerPassword" type="password" placeholder="Crie uma senha forte" />
+              </div>
+              <button id="registerBtn" class="btn btn-primary">Criar conta</button>
+            </div>
+          </div>
+
+          <div id="resetPane" class="hidden">
+            <p class="eyebrow">Nova senha</p>
+            <h3>Defina sua nova senha</h3>
+
+            <div class="form" style="margin-top:14px;">
+              <div>
+                <label for="newPassword">Nova senha</label>
+                <input id="newPassword" type="password" placeholder="Digite a nova senha" />
+              </div>
+              <div>
+                <label for="confirmPassword">Confirmar senha</label>
+                <input id="confirmPassword" type="password" placeholder="Repita a nova senha" />
+              </div>
+              <button id="saveNewPasswordBtn" class="btn btn-primary">Salvar nova senha</button>
+            </div>
+          </div>
+
+          <div id="statusBox" class="status">Aguardando ação...</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="adminPage" class="page hidden">
+    <div class="admin-shell">
+      <div class="admin-wrap">
+        <div class="admin-card card">
+          <div class="admin-top">
+            <div>
+              <p class="eyebrow">Painel administrativo</p>
+              <h2>AAA Admin</h2>
+              <p class="muted" style="margin-top:8px; line-height:1.65;">
+                Visão geral do sistema sem acesso ao conteúdo financeiro individual dos usuários.
+              </p>
+            </div>
+
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+              <span class="pill">Admin conectado</span>
+              <button id="adminLogoutBtn" class="btn btn-danger">Sair</button>
+            </div>
+          </div>
+
+          <div class="admin-stats">
+            <div class="stat">
+              <span>Usuários cadastrados</span>
+              <strong id="adminUserCount">0</strong>
+            </div>
+            <div class="stat">
+              <span>Logins totais</span>
+              <strong id="adminLoginCount">0</strong>
+            </div>
+            <div class="stat">
+              <span>Último cadastro</span>
+              <strong id="adminLatestSignup">-</strong>
+            </div>
+            <div class="stat">
+              <span>Usuário mais ativo</span>
+              <strong id="adminTopUser">-</strong>
+            </div>
+          </div>
+
+          <div class="admin-grid">
+            <div class="inner">
+              <p class="eyebrow">Gráfico</p>
+              <h4>Cadastros por dia</h4>
+              <div id="adminChart" class="chart"></div>
+            </div>
+
+            <div class="inner">
+              <p class="eyebrow">Usuários</p>
+              <h4>Lista de usuários</h4>
+              <p class="muted" style="margin-top:8px;">
+                Mostra somente nome, foto e quantidade de logins.
+              </p>
+              <div id="adminUserList" class="user-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+    const SUPABASE_URL = 'https://lucgrqkdlrnrhfbnqerg.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_DenbhUATl84jKOnpRxtlbA_jknRkx2M';
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const ADMIN_ALIAS = 'Admin2026';
+    const ADMIN_EMAIL = 'admin2026@aaa.app';
+    const WELCOME_KEY = 'aaa_seen_welcome_v2';
+
+    const welcomePage = document.getElementById('welcomePage');
+    const welcomeCard = document.getElementById('welcomeCard');
+    const authCard = document.getElementById('authCard');
+    const adminPage = document.getElementById('adminPage');
+
+    const goToLoginBtn = document.getElementById('goToLoginBtn');
+    const goToRegisterBtn = document.getElementById('goToRegisterBtn');
+
+    const tabLoginBtn = document.getElementById('tabLoginBtn');
+    const tabRegisterBtn = document.getElementById('tabRegisterBtn');
+
+    const loginPane = document.getElementById('loginPane');
+    const registerPane = document.getElementById('registerPane');
+    const resetPane = document.getElementById('resetPane');
+
+    const loginIdentifier = document.getElementById('loginIdentifier');
+    const loginPassword = document.getElementById('loginPassword');
+    const loginBtn = document.getElementById('loginBtn');
+    const forgotPasswordBtn = document.getElementById('forgotPasswordBtn');
+
+    const registerName = document.getElementById('registerName');
+    const registerEmail = document.getElementById('registerEmail');
+    const registerPassword = document.getElementById('registerPassword');
+    const registerBtn = document.getElementById('registerBtn');
+
+    const newPassword = document.getElementById('newPassword');
+    const confirmPassword = document.getElementById('confirmPassword');
+    const saveNewPasswordBtn = document.getElementById('saveNewPasswordBtn');
+
+    const statusBox = document.getElementById('statusBox');
+
+    const adminLogoutBtn = document.getElementById('adminLogoutBtn');
+    const adminUserCount = document.getElementById('adminUserCount');
+    const adminLoginCount = document.getElementById('adminLoginCount');
+    const adminLatestSignup = document.getElementById('adminLatestSignup');
+    const adminTopUser = document.getElementById('adminTopUser');
+    const adminChart = document.getElementById('adminChart');
+    const adminUserList = document.getElementById('adminUserList');
+
+    let currentSession = null;
+    let currentProfile = null;
+
+    function setStatus(message, isError = false) {
+      statusBox.textContent = message;
+      statusBox.style.background = isError ? 'rgba(239,68,68,.10)' : 'rgba(255,255,255,.05)';
+      statusBox.style.borderColor = isError ? 'rgba(239,68,68,.28)' : 'rgba(255,255,255,.06)';
+    }
+
+    function normalizeLoginIdentifier(value) {
+      const clean = value.trim();
+      if (!clean) return clean;
+      if (clean.toLowerCase() === ADMIN_ALIAS.toLowerCase()) return ADMIN_EMAIL;
+      return clean;
+    }
+
+    function markWelcomeSeen() {
+      localStorage.setItem(WELCOME_KEY, 'true');
+    }
+
+    function hasSeenWelcome() {
+      return localStorage.getItem(WELCOME_KEY) === 'true';
+    }
+
+    function hideAllAuthPanes() {
+      loginPane.classList.add('hidden');
+      registerPane.classList.add('hidden');
+      resetPane.classList.add('hidden');
+    }
+
+    function setTab(mode) {
+      const isLogin = mode === 'login';
+      const isRegister = mode === 'register';
+      const isReset = mode === 'reset';
+
+      tabLoginBtn.classList.toggle('active', isLogin);
+      tabRegisterBtn.classList.toggle('active', isRegister);
+
+      hideAllAuthPanes();
+
+      if (isLogin) loginPane.classList.remove('hidden');
+      if (isRegister) registerPane.classList.remove('hidden');
+      if (isReset) resetPane.classList.remove('hidden');
+    }
+
+    function showWelcomeOnly() {
+      welcomePage.classList.remove('hidden');
+      adminPage.classList.add('hidden');
+      welcomeCard.classList.remove('hidden');
+      authCard.classList.add('hidden');
+    }
+
+    function showAuthOnly(mode = 'login') {
+      welcomePage.classList.remove('hidden');
+      adminPage.classList.add('hidden');
+      welcomeCard.classList.add('hidden');
+      authCard.classList.remove('hidden');
+      setTab(mode);
+    }
+
+    function showAdminOnly() {
+      welcomePage.classList.add('hidden');
+      adminPage.classList.remove('hidden');
+    }
+
+    async function ensureProfile(session, name = '') {
+      const user = session.user;
+
+      const { data: existing, error: existingError } = await supabase
+        .from('app_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (existingError) throw existingError;
+
+      if (!existing) {
+        const payload = {
+          user_id: user.id,
+          email: user.email,
+          display_name: name || user.user_metadata?.display_name || '',
+          avatar_url: null,
+          role: user.email === ADMIN_EMAIL ? 'admin' : 'user',
+          last_login_at: new Date().toISOString(),
+          last_seen_at: new Date().toISOString(),
+          login_count: 1
+        };
+
+        const { error } = await supabase.from('app_profiles').insert(payload);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('app_profiles')
+          .update({
+            email: user.email,
+            last_login_at: new Date().toISOString(),
+            last_seen_at: new Date().toISOString(),
+            login_count: Number(existing.login_count || 0) + 1
+          })
+          .eq('user_id', user.id);
+
+        if (error) throw error;
+      }
+
+      const { data, error } = await supabase
+        .from('app_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) throw error;
+
+      currentProfile = data;
+      return data;
+    }
+
+    async function ensureFinanceRow(session) {
+      const { data: row, error: rowError } = await supabase
+        .from('user_finance_data')
+        .select('user_id')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+
+      if (rowError) throw rowError;
+
+      if (!row) {
+        const emptyState = {
+          selectedMonth: new Date().toISOString().slice(0, 7),
+          months: {}
+        };
+
+        const { error } = await supabase
+          .from('user_finance_data')
+          .insert({
+            user_id: session.user.id,
+            app_state: emptyState
+          });
+
+        if (error) throw error;
+      }
+    }
+
+    async function afterAuth(session, registerNameValue = '') {
+      currentSession = session;
+      await ensureProfile(session, registerNameValue);
+      await ensureFinanceRow(session);
+
+      if (currentProfile.role === 'admin') {
+        showAdminOnly();
+        await renderAdmin();
+        return;
+      }
+
+      window.location.href = 'app.html';
+    }
+
+    async function login() {
+      const identifier = normalizeLoginIdentifier(loginIdentifier.value);
+      const password = loginPassword.value.trim();
+
+      if (!identifier || !password) {
+        setStatus('Preencha login e senha.', true);
+        return;
+      }
+
+      setStatus('Entrando...');
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: identifier,
+        password
+      });
+
+      if (error) {
+        setStatus('Erro no login: ' + error.message, true);
+        return;
+      }
+
+      markWelcomeSeen();
+      await afterAuth(data.session);
+      setStatus('Login realizado com sucesso.');
+    }
+
+    async function register() {
+      const name = registerName.value.trim();
+      const email = registerEmail.value.trim();
+      const password = registerPassword.value.trim();
+
+      if (!name || !email || !password) {
+        setStatus('Preencha nome, email e senha.', true);
+        return;
+      }
+
+      setStatus('Criando conta...');
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            display_name: name
+          }
+        }
+      });
+
+      if (error) {
+        setStatus('Erro no cadastro: ' + error.message, true);
+        return;
+      }
+
+      markWelcomeSeen();
+
+      if (!data.session) {
+        showAuthOnly('login');
+        loginIdentifier.value = email;
+        setStatus('Conta criada. Confirme seu email antes de entrar, se a confirmação estiver ativa.');
+        return;
+      }
+
+      await afterAuth(data.session, name);
+      setStatus('Conta criada com sucesso.');
+    }
+
+    async function forgotPassword() {
+      const identifier = normalizeLoginIdentifier(loginIdentifier.value);
+
+      if (!identifier || !identifier.includes('@')) {
+        setStatus('Digite seu email no campo de login para recuperar a senha.', true);
+        return;
+      }
+
+      const redirectTo = `${window.location.origin}${window.location.pathname}?reset=1`;
+
+      const { error } = await supabase.auth.resetPasswordForEmail(identifier, { redirectTo });
+
+      if (error) {
+        setStatus('Erro ao enviar recuperação: ' + error.message, true);
+        return;
+      }
+
+      setStatus('Email de recuperação enviado. Abra o link do email para definir a nova senha.');
+    }
+
+    async function saveNewPassword() {
+      const pass1 = newPassword.value.trim();
+      const pass2 = confirmPassword.value.trim();
+
+      if (!pass1 || !pass2) {
+        setStatus('Preencha os dois campos de senha.', true);
+        return;
+      }
+
+      if (pass1 !== pass2) {
+        setStatus('As senhas não coincidem.', true);
+        return;
+      }
+
+      if (pass1.length < 6) {
+        setStatus('Use uma senha com pelo menos 6 caracteres.', true);
+        return;
+      }
+
+      setStatus('Salvando nova senha...');
+
+      const { error } = await supabase.auth.updateUser({
+        password: pass1
+      });
+
+      if (error) {
+        setStatus('Erro ao salvar nova senha: ' + error.message, true);
+        return;
+      }
+
+      await supabase.auth.signOut();
+      currentSession = null;
+      currentProfile = null;
+      showAuthOnly('login');
+      loginIdentifier.value = '';
+      loginPassword.value = '';
+      newPassword.value = '';
+      confirmPassword.value = '';
+      setStatus('Senha redefinida com sucesso. Agora entre com a nova senha.');
+    }
+
+    async function logoutAdmin() {
+      await supabase.auth.signOut();
+      currentSession = null;
+      currentProfile = null;
+
+      if (hasSeenWelcome()) showAuthOnly('login');
+      else showWelcomeOnly();
+
+      setStatus('Sessão encerrada.');
+    }
+
+    function buildAdminChart(users) {
+      const grouped = {};
+
+      users.forEach(user => {
+        const day = new Date(user.created_at).toLocaleDateString('pt-BR');
+        grouped[day] = (grouped[day] || 0) + 1;
+      });
+
+      const entries = Object.entries(grouped).sort((a, b) => {
+        const [da] = a;
+        const [db] = b;
+        const pa = da.split('/').reverse().join('-');
+        const pb = db.split('/').reverse().join('-');
+        return pa.localeCompare(pb);
+      }).slice(-7);
+
+      const max = Math.max(...entries.map(([, v]) => v), 1);
+
+      if (!entries.length) {
+        adminChart.innerHTML = '<div class="empty" style="width:100%;">Ainda não há dados suficientes para o gráfico.</div>';
+        return;
+      }
+
+      adminChart.innerHTML = entries.map(([label, value]) => {
+        const h = Math.max(18, (value / max) * 150);
+        return `
+          <div class="bar-wrap">
+            <div class="bar" style="height:${h}px;"></div>
+            <div class="bar-label">${label}<br>${value}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function buildAdminUserList(users) {
+      if (!users.length) {
+        adminUserList.innerHTML = '<div class="empty">Nenhum usuário comum cadastrado ainda.</div>';
+        return;
+      }
+
+      adminUserList.innerHTML = users.map(user => {
+        const avatar = user.avatar_url
+          ? `<img class="avatar" src="${user.avatar_url}" alt="">`
+          : `<div class="avatar">${(user.display_name || '?').charAt(0).toUpperCase()}</div>`;
+
+        return `
+          <div class="user-row">
+            <div class="user-left">
+              ${avatar}
+              <div>
+                <strong>${user.display_name || 'Sem nome'}</strong>
+                <div style="color:var(--muted); font-size:13px; margin-top:4px;">
+                  Criado em ${new Date(user.created_at).toLocaleDateString('pt-BR')}
+                </div>
+              </div>
+            </div>
+            <div style="color:var(--muted); font-size:13px;">
+              ${Number(user.login_count || 0)} login(s)
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function renderAdmin() {
+      const { data, error } = await supabase
+        .from('app_profiles')
+        .select('user_id, email, display_name, avatar_url, role, created_at, login_count, last_login_at')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error(error);
+        adminChart.innerHTML = '<div class="empty" style="width:100%;">Não foi possível carregar os dados do admin.</div>';
+        adminUserList.innerHTML = '<div class="empty">Verifique a policy do app_profiles.</div>';
+        return;
+      }
+
+      const users = (data || []).filter(user => user.role !== 'admin');
+
+      adminUserCount.textContent = String(users.length);
+      adminLoginCount.textContent = String(users.reduce((acc, user) => acc + Number(user.login_count || 0), 0));
+
+      const latest = [...users].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+      adminLatestSignup.textContent = latest
+        ? new Date(latest.created_at).toLocaleDateString('pt-BR')
+        : '-';
+
+      const top = [...users].sort((a, b) => Number(b.login_count || 0) - Number(a.login_count || 0))[0];
+      adminTopUser.textContent = top ? (top.display_name || 'Sem nome') : '-';
+
+      buildAdminChart(users);
+      buildAdminUserList(users);
+    }
+
+    async function bootstrap() {
+      try {
+        const url = new URL(window.location.href);
+        const isResetMode = url.searchParams.get('reset') === '1';
+
+        if (isResetMode) {
+          showAuthOnly('reset');
+          setStatus('Defina sua nova senha para concluir a recuperação.');
+        } else if (hasSeenWelcome()) {
+          showAuthOnly('login');
+          setStatus('Entre com sua conta para continuar.');
+        } else {
+          showWelcomeOnly();
+        }
+
+        const { data, error } = await supabase.auth.getSession();
+
+        if (error) {
+          setStatus('Erro ao recuperar sessão: ' + error.message, true);
+          return;
+        }
+
+        if (!data.session) return;
+
+        if (isResetMode) return;
+
+        await afterAuth(data.session);
+      } catch (err) {
+        console.error(err);
+        setStatus('Erro ao iniciar a tela: ' + err.message, true);
+      }
+    }
+
+    goToLoginBtn.addEventListener('click', () => {
+      markWelcomeSeen();
+      showAuthOnly('login');
+      setStatus('Entre com sua conta para continuar.');
+    });
+
+    goToRegisterBtn.addEventListener('click', () => {
+      markWelcomeSeen();
+      showAuthOnly('register');
+      setStatus('Crie sua conta para começar.');
+    });
+
+    tabLoginBtn.addEventListener('click', () => {
+      setTab('login');
+      setStatus('Entre com sua conta para continuar.');
+    });
+
+    tabRegisterBtn.addEventListener('click', () => {
+      setTab('register');
+      setStatus('Preencha os dados para criar sua conta.');
+    });
+
+    loginBtn.addEventListener('click', login);
+    registerBtn.addEventListener('click', register);
+    forgotPasswordBtn.addEventListener('click', forgotPassword);
+    saveNewPasswordBtn.addEventListener('click', saveNewPassword);
+    adminLogoutBtn.addEventListener('click', logoutAdmin);
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+      currentSession = session || null;
+    });
+
+    bootstrap();
+  </script>
+</body>
+</html>

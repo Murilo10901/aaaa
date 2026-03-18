@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Assistente Financeiro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-bg"></div>
+
+  <header class="topbar">
+    <div class="brand-area">
+      <p class="eyebrow">Controle financeiro pessoal</p>
+      <h1>Assistente Financeiro</h1>
+      <p class="subtitle">
+        Organize conta, cartões, pendências, dinheiro guardado e histórico mensal de um jeito simples.
+      </p>
+    </div>
+
+    <div class="topbar-actions">
+      <button id="howToUseBtn" class="btn btn-secondary">Como usar?</button>
+      <button id="menuToggleBtn" class="menu-toggle-btn" aria-label="Abrir menu">☰</button>
+    </div>
+  </header>
+
+  <section class="month-toolbar card">
+    <div class="month-toolbar-left">
+      <div>
+        <p class="eyebrow">Filtro de mês</p>
+        <h3>Mês selecionado</h3>
+      </div>
+
+      <div class="month-controls">
+        <button id="prevMonthBtn" class="icon-btn" aria-label="Mês anterior">←</button>
+        <select id="monthSelect" class="month-select"></select>
+        <button id="nextMonthBtn" class="icon-btn" aria-label="Próximo mês">→</button>
+      </div>
+    </div>
+
+    <div class="month-toolbar-right">
+      <button id="createMonthBtn" class="btn btn-secondary">Novo mês</button>
+      <button id="duplicateMonthBtn" class="btn btn-secondary">Duplicar mês anterior</button>
+    </div>
+  </section>
+
+  <section class="card-filter-panel card">
+    <div class="card-filter-header">
+      <div>
+        <p class="eyebrow">Cartões</p>
+        <h3>Seus cartões</h3>
+      </div>
+
+      <div class="card-filter-actions">
+        <button id="showAllCardsBtn" class="btn btn-secondary">Todos os cartões</button>
+        <button id="createCardQuickBtn" class="btn btn-primary">+ Criar cartão</button>
+        <button id="editSelectedCardQuickBtn" class="btn btn-secondary">Editar cartão</button>
+      </div>
+    </div>
+
+    <div id="cardCarousel" class="card-carousel"></div>
+
+    <div id="cardRulesBanner" class="note-box" style="margin-top:14px;">
+      Regra rápida: compra no cartão entra na aba <strong>Cartões</strong>. Pix, débito, boleto e transferência entram na aba <strong>Conta</strong>.
+    </div>
+  </section>
+
+  <section class="counterparty-panel card">
+    <div class="counterparty-panel-header">
+      <div>
+        <p class="eyebrow">A receber / A pagar</p>
+        <h3>Devedores e empresas</h3>
+      </div>
+
+      <div class="counterparty-panel-actions">
+        <button id="clearCounterpartyFilterBtn" class="btn btn-secondary">Todos</button>
+        <button id="openCounterpartiesTabBtn" class="btn btn-primary">Abrir pendências</button>
+      </div>
+    </div>
+
+    <div id="counterpartyCarousel" class="counterparty-carousel"></div>
+  </section>
+
+  <main class="layout">
+    <section class="main-column">
+      <section class="dashboard-grid">
+        <div class="dashboard-card card">
+          <span>Saldo inicial</span>
+          <strong id="dashOpening">R$ 0,00</strong>
+        </div>
+        <div class="dashboard-card card">
+          <span>Entrou no mês</span>
+          <strong id="dashIncome">R$ 0,00</strong>
+        </div>
+        <div class="dashboard-card card">
+          <span>Saiu da conta</span>
+          <strong id="dashOutflow">R$ 0,00</strong>
+        </div>
+        <div class="dashboard-card card">
+          <span>Faturas</span>
+          <strong id="dashCards">R$ 0,00</strong>
+        </div>
+        <div class="dashboard-card card highlight-card">
+          <span>Livre no mês</span>
+          <strong id="dashFree">R$ 0,00</strong>
+        </div>
+        <div class="dashboard-card card">
+          <span>Por dia</span>
+          <strong id="dashDaily">R$ 0,00</strong>
+        </div>
+      </section>
+
+      <section class="chart-panel card">
+        <div class="chart-header">
+          <div>
+            <p class="eyebrow">Estatísticas</p>
+            <h3 id="chartTitle">Resumo do mês</h3>
+          </div>
+
+          <div class="chart-tabs">
+            <button class="chart-tab active" data-chart="selected">Mês atual</button>
+            <button class="chart-tab" data-chart="history">Histórico</button>
+          </div>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas id="financeChart" height="240"></canvas>
+        </div>
+
+        <div id="chartLegend" class="chart-legend"></div>
+      </section>
+
+      <section class="tabs-panel card">
+        <div class="tabs-nav tabs-nav-5" id="mainTabs">
+          <button class="main-tab active" data-tab="account">Conta</button>
+          <button class="main-tab" data-tab="cards">Cartões</button>
+          <button class="main-tab" data-tab="save">Guardar</button>
+          <button class="main-tab" data-tab="summary">Resumo</button>
+          <button class="main-tab" data-tab="counterparties">Pendências</button>
+        </div>
+
+        <div id="tabContent" class="tab-content"></div>
+      </section>
+    </section>
+
+    <aside class="summary-panel">
+      <div class="card summary-card">
+        <div class="summary-top">
+          <div>
+            <p class="eyebrow">Resumo rápido</p>
+            <h3>Visão do mês</h3>
+          </div>
+          <span class="live-badge">ao vivo</span>
+        </div>
+
+        <div class="summary-filter-bar">
+          <button id="summaryFilterAllBtn" class="summary-filter-btn active">Todos os cartões</button>
+          <button id="summaryFilterSelectedBtn" class="summary-filter-btn">Cartão selecionado</button>
+        </div>
+
+        <div class="summary-filter-bar">
+          <button id="summaryModeCurrentBtn" class="summary-filter-btn active">Cenário atual</button>
+          <button id="summaryModeProjectedBtn" class="summary-filter-btn">Cenário projetado</button>
+        </div>
+
+        <div class="summary-filter-bar summary-filter-bar-3">
+          <button id="summaryStatusAllBtn" class="summary-filter-btn active">Todos</button>
+          <button id="summaryStatusSettledBtn" class="summary-filter-btn">Liquidados</button>
+          <button id="summaryStatusPendingBtn" class="summary-filter-btn">Pendentes</button>
+        </div>
+
+        <div class="summary-counterparty-filter">
+          <label for="summaryCounterpartySelect">Filtrar por devedor / empresa</label>
+          <select id="summaryCounterpartySelect">
+            <option value="">Todos</option>
+          </select>
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-item">
+            <span>Entradas</span>
+            <strong id="sumIncome">R$ 0,00</strong>
+          </div>
+          <div class="summary-item">
+            <span>Saídas da conta</span>
+            <strong id="sumOutflow">R$ 0,00</strong>
+          </div>
+          <div class="summary-item">
+            <span>Faturas</span>
+            <strong id="sumCards">R$ 0,00</strong>
+          </div>
+          <div class="summary-item">
+            <span>Guardar no mês</span>
+            <strong id="sumSaveGoal">R$ 0,00</strong>
+          </div>
+          <div class="summary-item">
+            <span>A receber pendente</span>
+            <strong id="sumPendingReceivable">R$ 0,00</strong>
+          </div>
+          <div class="summary-item">
+            <span>A pagar pendente</span>
+            <strong id="sumPendingPayable">R$ 0,00</strong>
+          </div>
+          <div class="summary-item highlight">
+            <span>Restante</span>
+            <strong id="sumRemaining">R$ 0,00</strong>
+          </div>
+          <div class="summary-item highlight-soft">
+            <span>Livre para gastar</span>
+            <strong id="sumFree">R$ 0,00</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="card tips-card">
+        <p class="eyebrow">Mensagem do assistente</p>
+        <h3>Leitura rápida</h3>
+        <p id="assistantMessage" class="assistant-message">
+          Preencha os dados do mês para iniciar seu planejamento financeiro.
+        </p>
+      </div>
+
+      <div class="card tips-card">
+        <p class="eyebrow">Alertas</p>
+        <h3>Evitar conta torta</h3>
+        <div id="monthAlerts"></div>
+      </div>
+    </aside>
+  </main>
+
+  <div id="sideMenu" class="side-menu">
+    <div id="sideMenuBackdrop" class="side-menu-backdrop"></div>
+
+    <div class="side-menu-panel">
+      <div class="side-menu-header">
+        <div>
+          <p class="eyebrow">Conta segura</p>
+          <h3>Seu espaço</h3>
+        </div>
+        <button id="closeMenuBtn" class="icon-btn" aria-label="Fechar menu">✕</button>
+      </div>
+
+      <div class="menu-profile-card">
+        <div class="profile-avatar-wrap">
+          <img id="menuProfileImage" class="profile-avatar" alt="Foto do perfil" />
+          <div id="menuProfileFallback" class="profile-avatar-fallback">?</div>
+        </div>
+
+        <div class="menu-profile-info">
+          <strong id="menuProfileName">Usuário</strong>
+          <span id="menuProfileEmail">email@conta.com</span>
+          <span id="menuCurrentMonthLabel">Mês atual</span>
+        </div>
+      </div>
+
+      <div class="mini-summary-grid">
+        <div class="mini-summary-card">
+          <span>Livre no mês</span>
+          <strong id="menuFreeValue">R$ 0,00</strong>
+        </div>
+        <div class="mini-summary-card">
+          <span>Cofrinho</span>
+          <strong id="menuSavingsPotValue">R$ 0,00</strong>
+        </div>
+      </div>
+
+      <div class="menu-actions">
+        <button id="openProfileBtn" class="btn btn-secondary full-btn">Perfil</button>
+        <button id="openImportBtn" class="btn btn-secondary full-btn">Importar</button>
+        <button id="exportTxtBtn" class="btn btn-secondary full-btn">Baixar TXT</button>
+        <button id="exportJsonBtn" class="btn btn-secondary full-btn">Baixar JSON</button>
+        <button id="copySummaryBtn" class="btn btn-secondary full-btn">Copiar resumo</button>
+        <button id="applyFixedValuesBtn" class="btn btn-primary full-btn">Aplicar fixos ao mês</button>
+        <button id="resetBtn" class="btn btn-danger full-btn">Resetar mês selecionado</button>
+        <button id="logoutAppBtn" class="btn btn-danger full-btn">Sair da conta</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="importModal" class="modal hidden">
+    <div class="modal-backdrop" id="closeImportBackdrop"></div>
+
+    <div class="modal-content card">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">Importação</p>
+          <h3>Colar texto ou JSON</h3>
+        </div>
+        <button id="closeImportBtn" class="icon-btn" aria-label="Fechar">✕</button>
+      </div>
+
+      <p class="modal-text">
+        Você pode colar um JSON exportado do sistema ou um texto humano com seções como ENTRADAS, FATURA CARTAO, GASTOS FORA DO CARTAO, CONTAS EXTRAS e OBJETIVO DE ECONOMIA.
+      </p>
+
+      <textarea id="importText" placeholder="Cole aqui seu conteúdo..."></textarea>
+
+      <div class="modal-actions">
+        <button id="clearImportBtn" class="btn btn-ghost">Limpar</button>
+        <button id="applyImportBtn" class="btn btn-primary">Importar conteúdo</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="profileModal" class="modal hidden">
+    <div class="modal-backdrop" id="closeProfileBackdrop"></div>
+
+    <div class="modal-content card">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">Perfil</p>
+          <h3>Dados fixos e configurações</h3>
+        </div>
+        <button id="closeProfileBtn" class="icon-btn" aria-label="Fechar">✕</button>
+      </div>
+
+      <div class="profile-layout">
+        <div class="inner-card">
+          <div class="section-title">Informações básicas</div>
+          <div class="form-grid single" style="margin-top: 12px;">
+            <div>
+              <label for="profileNameInput">Nome</label>
+              <input id="profileNameInput" type="text" placeholder="Digite seu nome" />
+            </div>
+            <div>
+              <label for="profilePhotoInput">Foto de perfil</label>
+              <input id="profilePhotoInput" type="file" accept="image/*" />
+            </div>
+          </div>
+        </div>
+
+        <div class="inner-card">
+          <div class="section-title">Valores fixos</div>
+          <div class="form-grid single" style="margin-top: 12px;">
+            <div>
+              <label for="fixedSalaryInput">Salário fixo</label>
+              <input id="fixedSalaryInput" type="text" data-money placeholder="R$ 0,00" />
+            </div>
+            <div>
+              <label for="fixedSaveGoalInput">Quanto quer guardar por mês</label>
+              <input id="fixedSaveGoalInput" type="text" data-money placeholder="R$ 0,00" />
+            </div>
+            <div>
+              <label for="savingsPotBaseInput">Quanto já tem guardado no cofrinho</label>
+              <input id="savingsPotBaseInput" type="text" data-money placeholder="R$ 0,00" />
+            </div>
+          </div>
+        </div>
+
+        <div class="inner-card">
+          <div class="section-title">Receitas fixas</div>
+          <div class="form-grid" style="margin-top: 12px;">
+            <div>
+              <label for="fixedIncomeName">Nome</label>
+              <input id="fixedIncomeName" type="text" placeholder="Ex.: Renda extra fixa" />
+            </div>
+            <div>
+              <label for="fixedIncomeValue">Valor</label>
+              <input id="fixedIncomeValue" type="text" data-money placeholder="R$ 0,00" />
+            </div>
+          </div>
+          <div class="form-actions" style="margin-top: 12px;">
+            <button id="addFixedIncomeBtn" class="btn btn-primary">+ Adicionar receita fixa</button>
+          </div>
+          <div id="fixedIncomeList" class="item-list" style="margin-top: 14px;"></div>
+        </div>
+
+        <div class="inner-card">
+          <div class="section-title">Gastos fixos da conta</div>
+          <div class="form-grid" style="margin-top: 12px;">
+            <div>
+              <label for="fixedExpenseName">Nome</label>
+              <input id="fixedExpenseName" type="text" placeholder="Ex.: Internet" />
+            </div>
+            <div>
+              <label for="fixedExpenseValue">Valor</label>
+              <input id="fixedExpenseValue" type="text" data-money placeholder="R$ 0,00" />
+            </div>
+          </div>
+          <div class="form-actions" style="margin-top: 12px;">
+            <button id="addFixedExpenseBtn" class="btn btn-primary">+ Adicionar gasto fixo</button>
+          </div>
+          <div id="fixedExpenseList" class="item-list" style="margin-top: 14px;"></div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="saveProfileBtn" class="btn btn-primary">Salvar perfil</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="onboardingModal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+
+    <div class="modal-content card onboarding-content">
+      <div class="onboarding-progress">
+        <span id="onboardingCounter">1 / 8</span>
+        <div class="progress-bar">
+          <div id="onboardingProgressFill"></div>
+        </div>
+      </div>
+
+      <div class="onboarding-hero">
+        <div class="onboarding-icon" id="onboardingIcon">💡</div>
+        <div>
+          <p class="eyebrow">Passo a passo</p>
+          <h3 id="onboardingTitle">Bem-vindo</h3>
+        </div>
+      </div>
+
+      <p id="onboardingText" class="onboarding-text"></p>
+      <div id="onboardingHint" class="note-box onboarding-hint"></div>
+
+      <div id="onboardingAskName" class="onboarding-name-box hidden">
+        <label for="onboardingNameInput">Como podemos te chamar?</label>
+        <input id="onboardingNameInput" type="text" placeholder="Digite seu nome" />
+      </div>
+
+      <div class="modal-actions">
+        <button id="skipOnboardingBtn" class="btn btn-ghost">Pular</button>
+        <button id="prevOnboardingBtn" class="btn btn-secondary">Voltar</button>
+        <button id="nextOnboardingBtn" class="btn btn-primary">Próximo</button>
+      </div>
+    </div>
+  </div>
+
+  <template id="itemRowTemplate">
+    <div class="item-row">
+      <div class="item-main">
+        <div class="item-info">
+          <strong class="item-name"></strong>
+          <span class="item-meta"></span>
+          <span class="item-value"></span>
+        </div>
+      </div>
+      <div class="item-actions">
+        <button class="small-btn edit-btn">✏ Editar</button>
+        <button class="small-btn delete-btn danger">🗑 Remover</button>
+      </div>
+    </div>
+  </template>
+
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+    const SUPABASE_URL = 'https://lucgrqkdlrnrhfbnqerg.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_DenbhUATl84jKOnpRxtlbA_jknRkx2M';
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    function defaultRemoteState() {
+      return {
+        onboardingSeen: false,
+        onboardingStep: 0,
+        activeChart: "selected",
+        activeTab: "account",
+        selectedMonthKey: new Date().toISOString().slice(0, 7),
+        selectedCardId: "",
+        summaryCardFilter: "all",
+        summaryProjectionMode: "current",
+        summaryStatusFilter: "all",
+        selectedCounterpartyId: "",
+        profile: {
+          name: "",
+          photo: "",
+          email: "",
+          fixedSalary: 0,
+          defaultSaveGoal: 0,
+          savingsPotBase: 0,
+          fixedIncomes: [],
+          fixedOutflows: []
+        },
+        cards: [],
+        counterparties: [],
+        months: {}
+      };
+    }
+
+    async function bootApp() {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error || !data.session) {
+        window.location.href = 'index.html';
+        return;
+      }
+
+      const session = data.session;
+      const user = session.user;
+
+      let { data: profile, error: profileError } = await supabase
+        .from('app_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error(profileError);
+        alert('Erro ao carregar perfil do usuário.');
+        window.location.href = 'index.html';
+        return;
+      }
+
+      if (!profile) {
+        const insertProfile = {
+          user_id: user.id,
+          email: user.email,
+          display_name: user.user_metadata?.display_name || '',
+          avatar_url: null,
+          role: user.email === 'admin2026@aaa.app' ? 'admin' : 'user',
+          last_login_at: new Date().toISOString(),
+          last_seen_at: new Date().toISOString(),
+          login_count: 1
+        };
+
+        const { error: insertProfileError } = await supabase
+          .from('app_profiles')
+          .insert(insertProfile);
+
+        if (insertProfileError) {
+          console.error(insertProfileError);
+          alert('Erro ao criar perfil do usuário.');
+          window.location.href = 'index.html';
+          return;
+        }
+
+        const { data: reloadedProfile } = await supabase
+          .from('app_profiles')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        profile = reloadedProfile;
+      } else {
+        await supabase
+          .from('app_profiles')
+          .update({
+            last_seen_at: new Date().toISOString()
+          })
+          .eq('user_id', user.id);
+
+        const { data: reloadedProfile } = await supabase
+          .from('app_profiles')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        profile = reloadedProfile;
+      }
+
+      if (profile?.role === 'admin') {
+        window.location.href = 'index.html';
+        return;
+      }
+
+      let { data: financeRow, error: financeError } = await supabase
+        .from('user_finance_data')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (financeError) {
+        console.error(financeError);
+        alert('Erro ao carregar dados financeiros.');
+        window.location.href = 'index.html';
+        return;
+      }
+
+      if (!financeRow) {
+        const initialState = defaultRemoteState();
+        initialState.profile.name = profile?.display_name || '';
+        initialState.profile.photo = profile?.avatar_url || '';
+        initialState.profile.email = profile?.email || user.email || '';
+
+        const { error: insertFinanceError } = await supabase
+          .from('user_finance_data')
+          .insert({
+            user_id: user.id,
+            app_state: initialState
+          });
+
+        if (insertFinanceError) {
+          console.error(insertFinanceError);
+          alert('Erro ao criar estrutura financeira do usuário.');
+          window.location.href = 'index.html';
+          return;
+        }
+
+        const { data: reloadedFinance } = await supabase
+          .from('user_finance_data')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        financeRow = reloadedFinance;
+      }
+
+      window.APP_BOOTSTRAP = {
+        supabase,
+        session,
+        user,
+        profile,
+        initialState: financeRow?.app_state || defaultRemoteState(),
+        cacheKey: `assistente_financeiro_user_${user.id}`,
+
+        async saveState(nextState) {
+          const { error } = await supabase
+            .from('user_finance_data')
+            .update({
+              app_state: nextState
+            })
+            .eq('user_id', user.id);
+
+          if (error) {
+            console.error('Erro ao salvar estado remoto:', error);
+            throw error;
+          }
+
+          await supabase
+            .from('app_profiles')
+            .update({
+              last_seen_at: new Date().toISOString()
+            })
+            .eq('user_id', user.id);
+        },
+
+        async updateProfile(patch) {
+          const payload = {
+            last_seen_at: new Date().toISOString()
+          };
+
+          if (typeof patch.display_name !== 'undefined') payload.display_name = patch.display_name;
+          if (typeof patch.avatar_url !== 'undefined') payload.avatar_url = patch.avatar_url;
+
+          const { error } = await supabase
+            .from('app_profiles')
+            .update(payload)
+            .eq('user_id', user.id);
+
+          if (error) {
+            console.error('Erro ao atualizar profile remoto:', error);
+            throw error;
+          }
+        },
+
+        async logout() {
+          await supabase.auth.signOut();
+        }
+      };
+
+      const script = document.createElement('script');
+      script.src = 'script.js';
+      document.body.appendChild(script);
+    }
+
+    bootApp();
+  </script>
+</body>
+</html>
