@@ -22,6 +22,30 @@ const CATEGORY_OPTIONS = [
   "Outros"
 ];
 
+const syncStatusBadge = document.getElementById("syncStatusBadge");
+
+let syncBadgeTimer = null;
+
+function showSyncBadge(text, type = "syncing", autoHideMs = 0) {
+  if (!syncStatusBadge) return;
+
+  clearTimeout(syncBadgeTimer);
+  syncStatusBadge.textContent = text;
+  syncStatusBadge.classList.remove("hidden", "syncing", "saved", "error");
+  syncStatusBadge.classList.add(type);
+
+  if (autoHideMs > 0) {
+    syncBadgeTimer = setTimeout(() => {
+      syncStatusBadge.classList.add("hidden");
+    }, autoHideMs);
+  }
+}
+
+function hideSyncBadge() {
+  if (!syncStatusBadge) return;
+  clearTimeout(syncBadgeTimer);
+  syncStatusBadge.classList.add("hidden");
+}
 const PAYMENT_METHODS = ["Pix", "Débito", "Transferência", "Dinheiro", "Boleto", "Outro"];
 
 const INCOME_STATUS_OPTIONS = [
@@ -56,6 +80,7 @@ const state = {
   summaryProjectionMode: "current",
   summaryStatusFilter: "all",
   selectedCounterpartyId: "",
+  lastSeenRealMonth: "",
   profile: {
     name: "",
     photo: "",
@@ -124,6 +149,11 @@ const onboardingSteps = [
 ];
 
 // ELEMENTOS
+// Adicione isso junto com os outros const de elementos
+const welcomeMonthModal = document.getElementById("welcomeMonthModal");
+const welcomeMonthValue = document.getElementById("welcomeMonthValue");
+const closeWelcomeMonthBtn = document.getElementById("closeWelcomeMonthBtn");
+const closeWelcomeMonthBackdrop = document.getElementById("closeWelcomeMonthBackdrop");
 const howToUseBtn = document.getElementById("howToUseBtn");
 const menuToggleBtn = document.getElementById("menuToggleBtn");
 
@@ -430,6 +460,7 @@ function normalizeStateShape(source) {
     summaryProjectionMode: source?.summaryProjectionMode ?? "current",
     summaryStatusFilter: source?.summaryStatusFilter ?? "all",
     selectedCounterpartyId: source?.selectedCounterpartyId ?? "",
+    lastSeenRealMonth: source?.lastSeenRealMonth ?? monthKeyFromDate(),
     profile: {
       name: source?.profile?.name ?? BOOT?.profile?.display_name ?? "",
       photo: source?.profile?.photo ?? BOOT?.profile?.avatar_url ?? "",
@@ -460,7 +491,6 @@ function getSelectedMonthData() {
 function getMonthKeysSorted() {
   return Object.keys(state.months).sort();
 }
-
 function queueRemoteSave() {
   if (!BOOT?.saveState) return;
 
@@ -473,17 +503,21 @@ function queueRemoteSave() {
     if (serialized === lastRemoteSerialized) return;
 
     remoteSaveRunning = true;
+    showSyncBadge("Sincronizando...", "syncing");
 
     try {
       await BOOT.saveState(JSON.parse(serialized));
       lastRemoteSerialized = serialized;
+      showSyncBadge("Salvo", "saved", 1400);
     } catch (error) {
       console.error("Falha ao salvar no Supabase:", error);
+      showSyncBadge("Erro ao sincronizar", "error", 2500);
     } finally {
       remoteSaveRunning = false;
     }
   }, 700);
 }
+
 
 async function syncProfileToRemote() {
   if (!BOOT?.updateProfile) return;
@@ -499,22 +533,14 @@ async function syncProfileToRemote() {
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   queueRemoteSave();
 }
 
 function loadState() {
-  const cacheRaw = localStorage.getItem(STORAGE_KEY);
   let source = null;
 
   if (BOOT?.initialState) {
     source = BOOT.initialState;
-  } else if (cacheRaw) {
-    try {
-      source = JSON.parse(cacheRaw);
-    } catch {
-      source = null;
-    }
   }
 
   const normalized = normalizeStateShape(source || {});
@@ -534,6 +560,7 @@ function loadState() {
     state.profile.email = BOOT.user.email;
   }
 }
+
 
 function createEmptyState(text) {
   const div = document.createElement("div");
@@ -1177,6 +1204,7 @@ function prevOnboarding() {
 }
 
 // MÊS
+
 function populateMonthSelect() {
   const keys = getMonthKeysSorted();
   monthSelect.innerHTML = "";
@@ -3202,6 +3230,15 @@ function removeFixedOutflowById(id) {
 }
 
 // EVENTOS
+
+// Fechar modal de novo mês
+closeWelcomeMonthBtn?.addEventListener("click", () => {
+  welcomeMonthModal.classList.add("hidden");
+});
+
+closeWelcomeMonthBackdrop?.addEventListener("click", () => {
+  welcomeMonthModal.classList.add("hidden");
+});
 howToUseBtn?.addEventListener("click", () => openOnboarding(true));
 
 menuToggleBtn?.addEventListener("click", openSideMenu);
@@ -3445,8 +3482,89 @@ logoutAppBtn?.addEventListener("click", async () => {
   window.location.href = "index.html";
 });
 
-// INIT
+// ==========================================
+// FUNÇÃO DA VIRADA DE MÊS
+// ==========================================
+// ==========================================
+// FUNÇÃO DA VIRADA DE MÊS (Modo Produção Oficial)
+// ==========================================
+function checkMonthTransition() {
+  // Puxa a data REAL de hoje do calendário do computador/celular
+  const currentRealMonthKey = monthKeyFromDate(); 
+
+  // 1. Se for o primeiro acesso da vida do app, cria o carimbo invisível e segue a vida
+  if (!state.lastSeenRealMonth) {
+    state.lastSeenRealMonth = currentRealMonthKey;
+    saveState();
+    return; 
+  }
+
+  // 2. Se a data de hoje for maior que a do último carimbo salvo... VIRADA DETECTADA!
+  if (currentRealMonthKey > state.lastSeenRealMonth) {
+    console.log("🚀 Virada de mês na vida real detectada!");
+    
+    const lastMonthKey = state.lastSeenRealMonth; 
+    let saldoTransportado = 0;
+
+    // 3. Faz toda a matemática de quanto sobrou do mês passado
+    if (state.months[lastMonthKey]) {
+      const lastMonthData = state.months[lastMonthKey];
+      
+      const filteredIncomes = getFilteredMonthIncomes(lastMonthData);
+      const filteredOutflows = getFilteredMonthOutflows(lastMonthData);
+
+      const totalIncome = filteredIncomes.reduce((acc, item) => acc + Number(item.amount || 0), 0);
+      const totalOutflow = filteredOutflows.reduce((acc, item) => acc + Number(item.amount || 0), 0);
+      const totalCards = getFilteredCardTotal(lastMonthKey);
+      
+      const opening = Number(lastMonthData.openingBalance || 0);
+      const saved = Number(lastMonthData.savedThisMonth || 0);
+
+      const remaining = opening + totalIncome - totalOutflow - totalCards - saved;
+      
+      saldoTransportado = remaining > 0 ? remaining : 0;
+    }
+
+    // 4. Se o mês novo não existir na memória, cria a estrutura dele
+    if (!state.months[currentRealMonthKey]) {
+      state.months[currentRealMonthKey] = createEmptyMonthData();
+    }
+
+    // 5. Salva o dinheiro que sobrou como Saldo Inicial e atualiza o carimbo
+    state.months[currentRealMonthKey].openingBalance = saldoTransportado;
+    state.lastSeenRealMonth = currentRealMonthKey;
+    state.selectedMonthKey = currentRealMonthKey; 
+    saveState();
+
+    // 6. Mostra o Popup de boas-vindas na tela
+    const modal = document.getElementById("welcomeMonthModal");
+    const valorTxt = document.getElementById("welcomeMonthValue");
+
+    if (modal && valorTxt) {
+      valorTxt.textContent = formatCurrency(saldoTransportado);
+      modal.classList.remove("hidden");
+    }
+  }
+}
+// ==========================================
+// INIT FINAL DO APP
+// ==========================================
+
+// 0. CARREGA O BANCO DE DADOS PRIMEIRO (Faltava isso aqui!) 👇
 loadState();
+
+if (!state.selectedMonthKey) {
+  state.selectedMonthKey = monthKeyFromDate();
+}
+
+ensureMonthExists(state.selectedMonthKey);
+
+checkMonthTransition();
+
+if (!state.selectedMonthKey) {
+  state.selectedMonthKey = monthKeyFromDate();
+}
+
 ensureMonthExists(state.selectedMonthKey);
 
 if (!getSelectedMonthData().saveGoal && state.profile.defaultSaveGoal) {

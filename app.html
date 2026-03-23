@@ -11,8 +11,76 @@
     rel="stylesheet"
   >
   <link rel="stylesheet" href="style.css" />
+
+    <style>
+  .app-loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 10, 20, 0.82);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity .25s ease, visibility .25s ease;
+  }
+
+  .app-loading-overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .app-loading-box {
+    min-width: 220px;
+    max-width: 90vw;
+    padding: 24px 28px;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: 0 20px 60px rgba(0,0,0,.35);
+    text-align: center;
+    color: #fff;
+    font-family: Inter, sans-serif;
+  }
+
+  .app-loading-spinner {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    border: 4px solid rgba(255,255,255,0.18);
+    border-top-color: #b794ff;
+    animation: appSpin .9s linear infinite;
+  }
+
+  .app-loading-title {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .app-loading-text {
+    font-size: .92rem;
+    color: rgba(255,255,255,.82);
+  }
+
+  @keyframes appSpin {
+    to { transform: rotate(360deg); }
+  }
+
+  </style>
 </head>
 <body>
+  <div id="appLoadingOverlay" class="app-loading-overlay">
+  <div class="app-loading-box">
+    <div class="app-loading-spinner"></div>
+    <div class="app-loading-title">Carregando seu ambiente</div>
+    <div id="appLoadingText" class="app-loading-text">Preparando seus dados...</div>
+  </div>
+</div>
   <div class="app-bg"></div>
 
   <header class="topbar">
@@ -46,7 +114,7 @@
 
     <div class="month-toolbar-right">
       <button id="createMonthBtn" class="btn btn-secondary">Novo mês</button>
-      <button id="duplicateMonthBtn" class="btn btn-secondary">Duplicar mês anterior</button>
+      
     </div>
   </section>
 
@@ -277,7 +345,6 @@
         <button id="exportJsonBtn" class="btn btn-secondary full-btn">Baixar JSON</button>
         <button id="copySummaryBtn" class="btn btn-secondary full-btn">Copiar resumo</button>
         <button id="applyFixedValuesBtn" class="btn btn-primary full-btn">Aplicar fixos ao mês</button>
-        <button id="resetBtn" class="btn btn-danger full-btn">Resetar mês selecionado</button>
         <button id="logoutAppBtn" class="btn btn-danger full-btn">Sair da conta</button>
       </div>
     </div>
@@ -431,6 +498,22 @@
     </div>
   </div>
 
+  <div id="welcomeMonthModal" class="modal hidden">
+    <div class="modal-backdrop" id="closeWelcomeMonthBackdrop"></div>
+    <div class="modal-content card" style="text-align: center; max-width: 480px; padding: 30px;">
+      <div style="font-size: 50px; margin-bottom: 10px;">🚀</div>
+      <h2 style="margin: 0 0 10px;">Bem-vindo ao novo mês!</h2>
+      <p style="color: var(--muted); line-height: 1.5; margin-bottom: 20px;">
+        O tempo voa! Iniciamos um novo período de organização. As contas do mês passado continuam lá se precisar editar, mas o foco agora são os novos objetivos!
+      </p>
+      <div class="note-box" style="margin-bottom: 20px; text-align: left;">
+        Você finalizou o mês passado com <strong id="welcomeMonthValue" style="color: #9af6b2; font-size: 1.15rem; display: inline-block;">R$ 0,00</strong> livres e nós já aplicamos esse valor como seu <strong>Saldo Inicial</strong> para esse mês!
+      </div>
+      <p style="font-weight: bold; color: #b794ff; margin-bottom: 24px;">Amo vocês &lt;3</p>
+      <button id="closeWelcomeMonthBtn" class="btn btn-primary full-btn">Vamos conquistar esse mês!</button>
+    </div>
+  </div>
+
   <template id="itemRowTemplate">
     <div class="item-row">
       <div class="item-main">
@@ -446,44 +529,601 @@
       </div>
     </div>
   </template>
+  <div id="protectionSetupModal" class="protection-modal hidden">
+  <div class="protection-modal-backdrop"></div>
+  <div class="protection-modal-card">
+    <h2 class="protection-title">Crie sua senha de proteção</h2>
+    <p class="protection-subtitle">
+      Essa senha protege seus dados financeiros. Ela é diferente da senha da sua conta.
+    </p>
 
-  <script type="module">
-    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    <div class="protection-form">
+      <div>
+        <label for="setupProtectionPassword">Senha de proteção</label>
+        <input id="setupProtectionPassword" type="password" placeholder="Crie uma senha" />
+      </div>
 
-    const SUPABASE_URL = 'https://lucgrqkdlrnrhfbnqerg.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_DenbhUATl84jKOnpRxtlbA_jknRkx2M';
+      <div>
+        <label for="setupProtectionPasswordConfirm">Confirmar senha</label>
+        <input id="setupProtectionPasswordConfirm" type="password" placeholder="Repita a senha" />
+      </div>
+    </div>
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    <div class="protection-note">
+      Guarde bem essa senha. Se esquecer, você precisará da sua Recovery Key.
+    </div>
 
-    function defaultRemoteState() {
-      return {
-        onboardingSeen: false,
-        onboardingStep: 0,
-        activeChart: "selected",
-        activeTab: "account",
-        selectedMonthKey: new Date().toISOString().slice(0, 7),
-        selectedCardId: "",
-        summaryCardFilter: "all",
-        summaryProjectionMode: "current",
-        summaryStatusFilter: "all",
-        selectedCounterpartyId: "",
-        profile: {
-          name: "",
-          photo: "",
-          email: "",
-          fixedSalary: 0,
-          defaultSaveGoal: 0,
-          savingsPotBase: 0,
-          fixedIncomes: [],
-          fixedOutflows: []
-        },
-        cards: [],
-        counterparties: [],
-        months: {}
-      };
+    <div id="setupProtectionError" class="protection-error hidden"></div>
+
+    <div class="protection-actions">
+      <button id="confirmProtectionSetupBtn" type="button" class="btn btn-primary">Ativar proteção</button>
+    </div>
+  </div>
+</div>
+
+<div id="recoveryKeyModal" class="protection-modal hidden">
+  <div class="protection-modal-backdrop"></div>
+  <div class="protection-modal-card">
+    <h2 class="protection-title">Guarde sua Recovery Key</h2>
+    <p class="protection-subtitle">
+      Se você esquecer sua senha de proteção, essa chave será a única forma de recuperar o acesso aos seus dados.
+    </p>
+
+    <div class="recovery-key-box">
+      <div class="recovery-key-label">Recovery Key</div>
+      <div id="recoveryKeyValue" class="recovery-key-value"></div>
+    </div>
+
+    <div class="protection-note">
+      Tire print, copie e salve em local seguro. Sem essa chave, não será possível recuperar seus dados protegidos.
+    </div>
+
+    <div class="protection-actions">
+      <button id="copyRecoveryKeyBtn" type="button" class="btn btn-secondary">Copiar chave</button>
+      <button id="confirmRecoveryKeySavedBtn" type="button" class="btn btn-primary">Já salvei minha chave</button>
+    </div>
+  </div>
+</div>
+
+<div id="unlockProtectionModal" class="protection-modal hidden">
+  <div class="protection-modal-backdrop"></div>
+  <div class="protection-modal-card">
+    <h2 class="protection-title">Desbloqueie seus dados</h2>
+    <p class="protection-subtitle">
+      Digite sua senha de proteção para abrir seus dados financeiros.
+    </p>
+
+    <div class="protection-form">
+      <div>
+        <label for="unlockProtectionPassword">Senha de proteção</label>
+        <input id="unlockProtectionPassword" type="password" placeholder="Digite sua senha" />
+      </div>
+    </div>
+
+    <div id="unlockProtectionError" class="protection-error hidden"></div>
+
+    <div class="protection-actions">
+      <button id="openRecoveryModalBtn" type="button" class="btn btn-secondary">Esqueci minha senha</button>
+      <button id="confirmUnlockProtectionBtn" type="button" class="btn btn-primary">Desbloquear</button>
+    </div>
+  </div>
+</div>
+
+<div id="recoverProtectionModal" class="protection-modal hidden">
+  <div class="protection-modal-backdrop"></div>
+  <div class="protection-modal-card">
+    <h2 class="protection-title">Recuperar senha de proteção</h2>
+    <p class="protection-subtitle">
+      Use sua Recovery Key para definir uma nova senha de proteção.
+    </p>
+
+    <div class="protection-form">
+      <div>
+        <label for="recoveryKeyInput">Recovery Key</label>
+        <input id="recoveryKeyInput" type="text" placeholder="Cole sua Recovery Key" />
+      </div>
+
+      <div>
+        <label for="newProtectionPassword">Nova senha de proteção</label>
+        <input id="newProtectionPassword" type="password" placeholder="Nova senha" />
+      </div>
+
+      <div>
+        <label for="newProtectionPasswordConfirm">Confirmar nova senha</label>
+        <input id="newProtectionPasswordConfirm" type="password" placeholder="Repita a nova senha" />
+      </div>
+    </div>
+
+    <div id="recoverProtectionError" class="protection-error hidden"></div>
+
+    <div class="protection-actions">
+      <button id="cancelRecoverProtectionBtn" type="button" class="btn btn-secondary">Voltar</button>
+      <button id="confirmRecoverProtectionBtn" type="button" class="btn btn-primary">Redefinir proteção</button>
+    </div>
+  </div>
+</div>
+<div id="syncStatusBadge" class="sync-status-badge hidden">Salvo</div>
+<script type="module">
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+  const SUPABASE_URL = 'https://lucgrqkdlrnrhfbnqerg.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_DenbhUATl84jKOnpRxtlbA_jknRkx2M';
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const loadingOverlay = document.getElementById("appLoadingOverlay");
+  const loadingText = document.getElementById("appLoadingText");
+
+  const protectionSetupModal = document.getElementById("protectionSetupModal");
+  const recoveryKeyModal = document.getElementById("recoveryKeyModal");
+  const unlockProtectionModal = document.getElementById("unlockProtectionModal");
+  const recoverProtectionModal = document.getElementById("recoverProtectionModal");
+
+  const setupProtectionPassword = document.getElementById("setupProtectionPassword");
+  const setupProtectionPasswordConfirm = document.getElementById("setupProtectionPasswordConfirm");
+  const setupProtectionError = document.getElementById("setupProtectionError");
+  const confirmProtectionSetupBtn = document.getElementById("confirmProtectionSetupBtn");
+
+  const recoveryKeyValue = document.getElementById("recoveryKeyValue");
+  const copyRecoveryKeyBtn = document.getElementById("copyRecoveryKeyBtn");
+  const confirmRecoveryKeySavedBtn = document.getElementById("confirmRecoveryKeySavedBtn");
+
+  const unlockProtectionPassword = document.getElementById("unlockProtectionPassword");
+  const unlockProtectionError = document.getElementById("unlockProtectionError");
+  const openRecoveryModalBtn = document.getElementById("openRecoveryModalBtn");
+  const confirmUnlockProtectionBtn = document.getElementById("confirmUnlockProtectionBtn");
+
+  const recoveryKeyInput = document.getElementById("recoveryKeyInput");
+  const newProtectionPassword = document.getElementById("newProtectionPassword");
+  const newProtectionPasswordConfirm = document.getElementById("newProtectionPasswordConfirm");
+  const recoverProtectionError = document.getElementById("recoverProtectionError");
+  const cancelRecoverProtectionBtn = document.getElementById("cancelRecoverProtectionBtn");
+  const confirmRecoverProtectionBtn = document.getElementById("confirmRecoverProtectionBtn");
+
+  function setLoading(visible, text = "Carregando...") {
+    if (loadingText) loadingText.textContent = text;
+    if (loadingOverlay) {
+      loadingOverlay.classList.toggle("hidden", !visible);
     }
+  }
 
-    async function bootApp() {
+  function monthKeyFromLocalDate(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    return `${year}-${month}`;
+  }
+
+  function defaultRemoteState() {
+    return {
+      onboardingSeen: false,
+      onboardingStep: 0,
+      activeChart: "selected",
+      activeTab: "account",
+      selectedMonthKey: monthKeyFromLocalDate(),
+      selectedCardId: "",
+      summaryCardFilter: "all",
+      summaryProjectionMode: "current",
+      summaryStatusFilter: "all",
+      selectedCounterpartyId: "",
+      lastSeenRealMonth: monthKeyFromLocalDate(),
+      profile: {
+        name: "",
+        photo: "",
+        email: "",
+        fixedSalary: 0,
+        defaultSaveGoal: 0,
+        savingsPotBase: 0,
+        fixedIncomes: [],
+        fixedOutflows: []
+      },
+      cards: [],
+      counterparties: [],
+      months: {}
+    };
+  }
+
+  function openProtectionModal(modal) {
+    modal.classList.remove("hidden");
+  }
+
+  function closeProtectionModal(modal) {
+    modal.classList.add("hidden");
+  }
+
+  function hideProtectionError(el) {
+    el.classList.add("hidden");
+    el.textContent = "";
+  }
+
+  function showProtectionError(el, message) {
+    el.textContent = message;
+    el.classList.remove("hidden");
+  }
+
+  function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  }
+
+  function base64ToArrayBuffer(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+
+  async function deriveKeyFromPassword(password, saltBase64, iterations = 250000) {
+    const enc = new TextEncoder();
+
+    const passwordKey = await crypto.subtle.importKey(
+      "raw",
+      enc.encode(password),
+      "PBKDF2",
+      false,
+      ["deriveKey"]
+    );
+
+    const salt = saltBase64
+      ? new Uint8Array(base64ToArrayBuffer(saltBase64))
+      : crypto.getRandomValues(new Uint8Array(16));
+
+    const aesKey = await crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt,
+        iterations,
+        hash: "SHA-256"
+      },
+      passwordKey,
+      {
+        name: "AES-GCM",
+        length: 256
+      },
+      false,
+      ["encrypt", "decrypt"]
+    );
+
+    return {
+      key: aesKey,
+      saltBase64: arrayBufferToBase64(salt.buffer)
+    };
+  }
+
+  function generateRecoveryKey() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const groups = [];
+    for (let g = 0; g < 6; g++) {
+      let part = "";
+      for (let i = 0; i < 4; i++) {
+        part += chars[Math.floor(Math.random() * chars.length)];
+      }
+      groups.push(part);
+    }
+    return groups.join("-");
+  }
+
+  async function generateDataEncryptionKey() {
+    return crypto.subtle.generateKey(
+      { name: "AES-GCM", length: 256 },
+      true,
+      ["encrypt", "decrypt"]
+    );
+  }
+
+  async function encryptWithDataKey(appStateObject, dataKey) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encoded = new TextEncoder().encode(JSON.stringify(appStateObject));
+
+    const ciphertextBuffer = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      dataKey,
+      encoded
+    );
+
+    return {
+      version: 2,
+      cipher: "AES-GCM",
+      iv: arrayBufferToBase64(iv.buffer),
+      ciphertext: arrayBufferToBase64(ciphertextBuffer)
+    };
+  }
+
+  async function decryptWithDataKey(payload, dataKey) {
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: new Uint8Array(base64ToArrayBuffer(payload.iv)) },
+      dataKey,
+      base64ToArrayBuffer(payload.ciphertext)
+    );
+
+    return JSON.parse(new TextDecoder().decode(decryptedBuffer));
+  }
+
+  async function wrapDataKeyWithSecret(dataKey, secret) {
+    const exportedDataKey = await crypto.subtle.exportKey("raw", dataKey);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const iterations = 250000;
+
+    const { key, saltBase64 } = await deriveKeyFromPassword(secret, null, iterations);
+
+    const wrappedBuffer = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      key,
+      exportedDataKey
+    );
+
+    return {
+      version: 1,
+      kdf: "PBKDF2",
+      cipher: "AES-GCM",
+      iterations,
+      salt: saltBase64,
+      iv: arrayBufferToBase64(iv.buffer),
+      wrappedKey: arrayBufferToBase64(wrappedBuffer)
+    };
+  }
+
+  async function unwrapDataKeyWithSecret(wrappedPayload, secret) {
+    const { salt, iv, wrappedKey, iterations = 250000 } = wrappedPayload;
+
+    const { key } = await deriveKeyFromPassword(secret, salt, iterations);
+
+    const rawKeyBuffer = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: new Uint8Array(base64ToArrayBuffer(iv)) },
+      key,
+      base64ToArrayBuffer(wrappedKey)
+    );
+
+    return crypto.subtle.importKey(
+      "raw",
+      rawKeyBuffer,
+      { name: "AES-GCM" },
+      true,
+      ["encrypt", "decrypt"]
+    );
+  }
+
+  function askProtectionSetupModal() {
+    return new Promise((resolve) => {
+      setupProtectionPassword.value = "";
+      setupProtectionPasswordConfirm.value = "";
+      hideProtectionError(setupProtectionError);
+      openProtectionModal(protectionSetupModal);
+      setupProtectionPassword.focus();
+
+      const onConfirm = () => {
+        const pass1 = setupProtectionPassword.value.trim();
+        const pass2 = setupProtectionPasswordConfirm.value.trim();
+
+        if (pass1.length < 6) {
+          showProtectionError(setupProtectionError, "Use uma senha com pelo menos 6 caracteres.");
+          return;
+        }
+
+        if (pass1 !== pass2) {
+          showProtectionError(setupProtectionError, "As senhas não coincidem.");
+          return;
+        }
+
+        cleanup();
+        closeProtectionModal(protectionSetupModal);
+        resolve(pass1);
+      };
+
+      const cleanup = () => {
+        confirmProtectionSetupBtn.removeEventListener("click", onConfirm);
+      };
+
+      confirmProtectionSetupBtn.addEventListener("click", onConfirm);
+    });
+  }
+
+  function showRecoveryKeyModal(recoveryKey) {
+    return new Promise((resolve) => {
+      recoveryKeyValue.textContent = recoveryKey;
+      openProtectionModal(recoveryKeyModal);
+
+      const onCopy = async () => {
+        try {
+          await navigator.clipboard.writeText(recoveryKey);
+          copyRecoveryKeyBtn.textContent = "Copiado";
+          setTimeout(() => {
+            copyRecoveryKeyBtn.textContent = "Copiar chave";
+          }, 1200);
+        } catch {
+          alert("Não foi possível copiar automaticamente.");
+        }
+      };
+
+      const onConfirm = () => {
+        cleanup();
+        closeProtectionModal(recoveryKeyModal);
+        resolve();
+      };
+
+      const cleanup = () => {
+        copyRecoveryKeyBtn.removeEventListener("click", onCopy);
+        confirmRecoveryKeySavedBtn.removeEventListener("click", onConfirm);
+      };
+
+      copyRecoveryKeyBtn.addEventListener("click", onCopy);
+      confirmRecoveryKeySavedBtn.addEventListener("click", onConfirm);
+    });
+  }
+
+  function askUnlockProtectionModal() {
+    return new Promise((resolve) => {
+      unlockProtectionPassword.value = "";
+      hideProtectionError(unlockProtectionError);
+      openProtectionModal(unlockProtectionModal);
+      unlockProtectionPassword.focus();
+
+      const onUnlock = () => {
+        const password = unlockProtectionPassword.value.trim();
+        if (!password) {
+          showProtectionError(unlockProtectionError, "Digite sua senha de proteção.");
+          return;
+        }
+
+        cleanup();
+        closeProtectionModal(unlockProtectionModal);
+        resolve({ type: "password", password });
+      };
+
+      const onRecover = () => {
+        cleanup();
+        closeProtectionModal(unlockProtectionModal);
+        resolve({ type: "recover" });
+      };
+
+      const cleanup = () => {
+        confirmUnlockProtectionBtn.removeEventListener("click", onUnlock);
+        openRecoveryModalBtn.removeEventListener("click", onRecover);
+      };
+
+      confirmUnlockProtectionBtn.addEventListener("click", onUnlock);
+      openRecoveryModalBtn.addEventListener("click", onRecover);
+    });
+  }
+
+  function askRecoverProtectionModal() {
+    return new Promise((resolve) => {
+      recoveryKeyInput.value = "";
+      newProtectionPassword.value = "";
+      newProtectionPasswordConfirm.value = "";
+      hideProtectionError(recoverProtectionError);
+      openProtectionModal(recoverProtectionModal);
+      recoveryKeyInput.focus();
+
+      const onConfirm = () => {
+        const recoveryKey = recoveryKeyInput.value.trim().toUpperCase();
+        const pass1 = newProtectionPassword.value.trim();
+        const pass2 = newProtectionPasswordConfirm.value.trim();
+
+        if (!recoveryKey) {
+          showProtectionError(recoverProtectionError, "Digite sua Recovery Key.");
+          return;
+        }
+
+        if (pass1.length < 6) {
+          showProtectionError(recoverProtectionError, "Use uma nova senha com pelo menos 6 caracteres.");
+          return;
+        }
+
+        if (pass1 !== pass2) {
+          showProtectionError(recoverProtectionError, "As novas senhas não coincidem.");
+          return;
+        }
+
+        cleanup();
+        closeProtectionModal(recoverProtectionModal);
+        resolve({
+          cancelled: false,
+          recoveryKey,
+          newPassword: pass1
+        });
+      };
+
+      const onCancel = () => {
+        cleanup();
+        closeProtectionModal(recoverProtectionModal);
+        resolve({ cancelled: true });
+      };
+
+      const cleanup = () => {
+        confirmRecoverProtectionBtn.removeEventListener("click", onConfirm);
+        cancelRecoverProtectionBtn.removeEventListener("click", onCancel);
+      };
+
+      confirmRecoverProtectionBtn.addEventListener("click", onConfirm);
+      cancelRecoverProtectionBtn.addEventListener("click", onCancel);
+    });
+  }
+
+  async function setupProtectedState(initialState, userId) {
+    const protectionPassword = await askProtectionSetupModal();
+    const recoveryKey = generateRecoveryKey();
+    const dataKey = await generateDataEncryptionKey();
+
+    const appStateCrypto = await encryptWithDataKey(initialState, dataKey);
+    const encryptedDataKey = await wrapDataKeyWithSecret(dataKey, protectionPassword);
+    const recoveryKeyWrap = await wrapDataKeyWithSecret(dataKey, recoveryKey);
+
+    const { error } = await supabase
+      .from("user_finance_data")
+      .update({
+        app_state_crypto: appStateCrypto,
+        encrypted_data_key: encryptedDataKey,
+        recovery_key_wrap: recoveryKeyWrap,
+        crypto_mode: "wrapped_dek",
+        app_state_version: 2,
+        protection_setup_at: new Date().toISOString(),
+        app_state_migrated_at: new Date().toISOString()
+      })
+      .eq("user_id", userId);
+
+    if (error) throw error;
+
+    window.APP_UNLOCK_PASSWORD = protectionPassword;
+    await showRecoveryKeyModal(recoveryKey);
+  }
+
+  async function unlockProtectedState(financeRow, userId) {
+    while (true) {
+      const action = await askUnlockProtectionModal();
+
+      if (action.type === "password") {
+        try {
+          const dataKey = await unwrapDataKeyWithSecret(financeRow.encrypted_data_key, action.password);
+          const initialState = await decryptWithDataKey(financeRow.app_state_crypto, dataKey);
+          window.APP_UNLOCK_PASSWORD = action.password;
+          return initialState;
+        } catch (err) {
+          console.error(err);
+          openProtectionModal(unlockProtectionModal);
+          showProtectionError(unlockProtectionError, "Senha de proteção inválida.");
+        }
+      }
+
+      if (action.type === "recover") {
+        const recoveryResult = await askRecoverProtectionModal();
+        if (recoveryResult.cancelled) {
+          continue;
+        }
+
+        try {
+          const dataKey = await unwrapDataKeyWithSecret(financeRow.recovery_key_wrap, recoveryResult.recoveryKey);
+          const newEncryptedDataKey = await wrapDataKeyWithSecret(dataKey, recoveryResult.newPassword);
+
+          const { error } = await supabase
+            .from("user_finance_data")
+            .update({
+              encrypted_data_key: newEncryptedDataKey
+            })
+            .eq("user_id", userId);
+
+          if (error) throw error;
+
+          const initialState = await decryptWithDataKey(financeRow.app_state_crypto, dataKey);
+          window.APP_UNLOCK_PASSWORD = recoveryResult.newPassword;
+          alert("Senha de proteção redefinida com sucesso.");
+          return initialState;
+        } catch (err) {
+          console.error(err);
+          alert("Recovery Key inválida ou indisponível.");
+        }
+      }
+    }
+  }
+
+  async function bootApp() {
+    try {
+      setLoading(true, "Validando sessão...");
+
       const { data, error } = await supabase.auth.getSession();
 
       if (error || !data.session) {
@@ -493,6 +1133,8 @@
 
       const session = data.session;
       const user = session.user;
+
+      setLoading(true, "Carregando perfil...");
 
       let { data: profile, error: profileError } = await supabase
         .from('app_profiles')
@@ -559,6 +1201,8 @@
         return;
       }
 
+      setLoading(true, "Carregando dados financeiros...");
+
       let { data: financeRow, error: financeError } = await supabase
         .from('user_finance_data')
         .select('*')
@@ -601,19 +1245,54 @@
         financeRow = reloadedFinance;
       }
 
+      let initialState = null;
+
+      if (
+        financeRow?.app_state_crypto &&
+        financeRow?.encrypted_data_key &&
+        financeRow?.recovery_key_wrap
+      ) {
+        setLoading(false);
+        initialState = await unlockProtectedState(financeRow, user.id);
+        setLoading(true, "Abrindo a aplicação...");
+      } else {
+        initialState = financeRow?.app_state || defaultRemoteState();
+        setLoading(false);
+        await setupProtectedState(initialState, user.id);
+        setLoading(true, "Abrindo a aplicação...");
+      }
+
       window.APP_BOOTSTRAP = {
         supabase,
         session,
         user,
         profile,
-        initialState: financeRow?.app_state || defaultRemoteState(),
+        initialState,
         cacheKey: `assistente_financeiro_user_${user.id}`,
+        setLoading,
 
         async saveState(nextState) {
+          const protectionPassword = window.APP_UNLOCK_PASSWORD;
+          if (!protectionPassword) {
+            throw new Error("Senha de proteção não disponível em memória.");
+          }
+
+          const { data: latestRow, error: latestRowError } = await supabase
+            .from("user_finance_data")
+            .select("encrypted_data_key")
+            .eq("user_id", user.id)
+            .single();
+
+          if (latestRowError) throw latestRowError;
+
+          const dataKey = await unwrapDataKeyWithSecret(latestRow.encrypted_data_key, protectionPassword);
+          const appStateCrypto = await encryptWithDataKey(nextState, dataKey);
+
           const { error } = await supabase
             .from('user_finance_data')
             .update({
-              app_state: nextState
+              app_state_crypto: appStateCrypto,
+              app_state_version: 2
             })
             .eq('user_id', user.id);
 
@@ -650,16 +1329,30 @@
         },
 
         async logout() {
+          window.APP_UNLOCK_PASSWORD = null;
           await supabase.auth.signOut();
         }
       };
 
+      setLoading(true, "Abrindo a aplicação...");
       const script = document.createElement('script');
       script.src = 'script.js';
+      script.onload = () => setLoading(false);
+      script.onerror = () => {
+        setLoading(false);
+        alert("Erro ao carregar o script principal.");
+      };
       document.body.appendChild(script);
-    }
 
-    bootApp();
-  </script>
+    } catch (err) {
+      console.error(err);
+      setLoading(false);
+      alert("Ocorreu um erro ao iniciar a aplicação.");
+      window.location.href = 'index.html';
+    }
+  }
+
+  bootApp();
+</script>
 </body>
 </html>
