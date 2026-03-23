@@ -623,6 +623,74 @@ function getStatusLabel(status) {
   return map[status] || status;
 }
 
+function getIncomeStatusOptions() {
+  return [
+    { value: "received", label: "Recebido" },
+    { value: "pending", label: "Pendente" },
+    { value: "not_received", label: "Não recebido" }
+  ];
+}
+
+function getOutflowStatusOptions() {
+  return [
+    { value: "paid", label: "Pago" },
+    { value: "pending", label: "Pendente" },
+    { value: "not_paid", label: "Não pago" }
+  ];
+}
+
+function updateIncomeStatus(incomeId, newStatus) {
+  const monthData = getSelectedMonthData();
+  const item = monthData.incomes.find((entry) => entry.id === incomeId);
+  if (!item) return;
+
+  item.status = newStatus;
+  saveState();
+  renderApp();
+}
+
+function updateOutflowStatus(outflowId, newStatus) {
+  const monthData = getSelectedMonthData();
+  const item = monthData.outflows.find((entry) => entry.id === outflowId);
+  if (!item) return;
+
+  item.status = newStatus;
+  saveState();
+  renderApp();
+}
+
+function createStatusDropdown(item, type) {
+  const select = document.createElement("select");
+  select.className = `status-dropdown ${item.status || ""}`;
+
+  const options = type === "income"
+    ? getIncomeStatusOptions()
+    : getOutflowStatusOptions();
+
+  select.innerHTML = options
+    .map((option) => `
+      <option value="${option.value}" ${option.value === item.status ? "selected" : ""}>
+        ${option.label}
+      </option>
+    `)
+    .join("");
+
+  select.addEventListener("change", (e) => {
+    const newStatus = e.target.value;
+
+    select.className = `status-dropdown ${newStatus}`;
+
+    if (type === "income") {
+      updateIncomeStatus(item.id, newStatus);
+    } else {
+      updateOutflowStatus(item.id, newStatus);
+    }
+  });
+
+  return select;
+}
+
+
 function isSettledStatus(status) {
   return status === "received" || status === "paid";
 }
@@ -816,8 +884,52 @@ function setManualInvoice(cardId, value, monthKey = state.selectedMonthKey) {
     state.months[monthKey].manualInvoices = {};
   }
 
-  state.months[monthKey].manualInvoices[cardId] = Number(value || 0);
+  const numericValue = Number(value || 0);
+  state.months[monthKey].manualInvoices[cardId] = numericValue;
+
+  // Faz a fatura manual virar uma saída da conta
+  syncManualInvoiceToOutflow(cardId, numericValue, monthKey);
+
   saveState();
+}
+function syncManualInvoiceToOutflow(cardId, value, monthKey = state.selectedMonthKey) {
+  ensureMonthExists(monthKey);
+
+  const monthData = state.months[monthKey];
+  const numericValue = Number(value || 0);
+  const card = getCardById(cardId);
+
+  if (!card) return;
+
+  const existingIndex = monthData.outflows.findIndex(
+    (item) => item.fromManualInvoice === true && item.cardId === cardId
+  );
+
+  if (numericValue <= 0) {
+    if (existingIndex >= 0) {
+      monthData.outflows.splice(existingIndex, 1);
+    }
+    return;
+  }
+
+  const outflowPayload = {
+    id: existingIndex >= 0 ? monthData.outflows[existingIndex].id : uid(),
+    date: `${monthKey}-10`,
+    description: `Pagamento fatura - ${card.name}`,
+    amount: numericValue,
+    category: "Fatura cartão",
+    method: "Débito",
+    status: "paid",
+    counterpartyId: "",
+    fromManualInvoice: true,
+    cardId
+  };
+
+  if (existingIndex >= 0) {
+    monthData.outflows[existingIndex] = outflowPayload;
+  } else {
+    monthData.outflows.push(outflowPayload);
+  }
 }
 
 function getInvoiceBreakdown(cardId, monthKey = state.selectedMonthKey) {
@@ -829,7 +941,9 @@ function getInvoiceBreakdown(cardId, monthKey = state.selectedMonthKey) {
   return {
     detailed,
     manual,
-    total: detailed + manual
+    // manual não entra mais no total de faturas,
+    // porque virou saída da conta
+    total: detailed
   };
 }
 
@@ -870,15 +984,22 @@ function getTotals(monthData = getSelectedMonthData(), monthKey = state.selected
   const totalOutflow = filteredOutflows.reduce((acc, item) => acc + Number(item.amount || 0), 0);
   const totalCards = getFilteredCardTotal(monthKey);
 
+  const pendingReceivable = getPendingReceivableTotal(monthKey);
+  const pendingPayable = getPendingPayableTotal(monthKey);
+
   const savedThisMonth = Number(monthData.savedThisMonth || 0);
 
-  const remaining =
-    Number(monthData.openingBalance || 0) +
-    totalIncome -
-    totalOutflow -
-    totalCards;
+  const totalExpense = totalOutflow + totalCards;
 
-  const freeToSpend = remaining - savedThisMonth;
+  const currentBalance = totalIncome - totalExpense;
+  const projectedBalance = (totalIncome + pendingReceivable) - (totalExpense + pendingPayable);
+
+  const balanceByMode =
+    state.summaryProjectionMode === "projected"
+      ? projectedBalance
+      : currentBalance;
+
+  const freeToSpend = balanceByMode - savedThisMonth;
   const dailyFree = freeToSpend / endOfMonthDaysRemaining(monthKey);
 
   return {
@@ -886,8 +1007,13 @@ function getTotals(monthData = getSelectedMonthData(), monthKey = state.selected
     totalIncome,
     totalOutflow,
     totalCards,
+    totalExpense,
+    pendingReceivable,
+    pendingPayable,
     savedThisMonth,
-    remaining,
+    currentBalance,
+    projectedBalance,
+    remaining: balanceByMode,
     freeToSpend,
     dailyFree
   };
@@ -948,9 +1074,9 @@ function getMonthAlerts() {
     alerts.push("Seu saldo inicial está zerado. Se havia dinheiro parado na conta no começo do mês, cadastre o saldo inicial para o cálculo ficar correto.");
   }
 
-  if (totals.freeToSpend < 0) {
-    alerts.push(`Seu livre para gastar está negativo em ${formatCurrency(Math.abs(totals.freeToSpend))}.`);
-  }
+  if (totals.remaining < 0) {
+  alerts.push(`Seu mês está negativo em ${formatCurrency(Math.abs(totals.remaining))}.`);
+}
 
   if (!state.cards.length) {
     alerts.push("Você ainda não cadastrou cartões. Se usa cartão de crédito, crie o cartão e lance as compras na aba Cartões.");
@@ -1752,11 +1878,15 @@ function updateDashboard() {
   sumOutflow.textContent = formatCurrency(totals.totalOutflow);
   sumCards.textContent = formatCurrency(totals.totalCards);
   sumSaveGoal.textContent = formatCurrency(monthData.savedThisMonth || 0);
+
+  sumPendingReceivable.textContent = formatCurrency(totals.pendingReceivable);
+  sumPendingPayable.textContent = formatCurrency(totals.pendingPayable);
+
   sumRemaining.textContent = formatCurrency(totals.remaining);
   sumFree.textContent = formatCurrency(totals.freeToSpend);
 
-  sumPendingReceivable.textContent = formatCurrency(getPendingReceivableTotal(state.selectedMonthKey));
-  sumPendingPayable.textContent = formatCurrency(getPendingPayableTotal(state.selectedMonthKey));
+  sumRemaining.parentElement.classList.toggle("negative", totals.remaining < 0);
+  sumFree.parentElement.classList.toggle("negative", totals.freeToSpend < 0);
 
   summaryFilterAllBtn.classList.toggle("active", state.summaryCardFilter === "all");
   summaryFilterSelectedBtn.classList.toggle("active", state.summaryCardFilter === "selected");
@@ -1777,21 +1907,31 @@ function updateAssistantMessage() {
   const month = monthLabel(state.selectedMonthKey);
   const name = userName();
 
-  const selectedCounterpartyName = state.selectedCounterpartyId
-    ? getCounterpartyName(state.selectedCounterpartyId)
-    : "todos os devedores e empresas";
-
-  const modeLabel = state.summaryProjectionMode === "current" ? "cenário atual" : "cenário projetado";
-
-  let message = `${name}, você está vendo ${month} no ${modeLabel}, filtrando ${selectedCounterpartyName}.`;
-
-  if (totals.freeToSpend >= 0) {
-    message = `${name}, em ${month} você tem ${formatCurrency(totals.freeToSpend)} livres no ${modeLabel}.`;
-  } else {
-    message = `${name}, atenção: em ${month} seu ${modeLabel} está negativo em ${formatCurrency(Math.abs(totals.freeToSpend))}.`;
+  if (state.summaryProjectionMode === "projected") {
+    if (totals.projectedBalance >= 0) {
+      assistantMessage.textContent =
+        `${name}, no cenário projetado de ${month}, ` +
+        `se você receber ${formatCurrency(totals.pendingReceivable)} ` +
+        `e pagar ${formatCurrency(totals.pendingPayable)}, ` +
+        `vai sobrar ${formatCurrency(totals.projectedBalance)} no mês.`;
+    } else {
+      assistantMessage.textContent =
+        `${name}, no cenário projetado de ${month}, ` +
+        `mesmo recebendo ${formatCurrency(totals.pendingReceivable)}, ` +
+        `você ainda fica negativo em ${formatCurrency(Math.abs(totals.projectedBalance))}.`;
+    }
+    return;
   }
 
-  assistantMessage.textContent = message;
+  if (totals.currentBalance >= 0) {
+    assistantMessage.textContent =
+      `${name}, no cenário atual de ${month}, ` +
+      `sobram ${formatCurrency(totals.currentBalance)} no mês.`;
+  } else {
+    assistantMessage.textContent =
+      `${name}, no cenário atual de ${month}, ` +
+      `você está negativo em ${formatCurrency(Math.abs(totals.currentBalance))}.`;
+  }
 }
 
 function renderMonthAlerts() {
@@ -2068,10 +2208,8 @@ function renderAccountTab() {
         );
 
         const wrapper = row.querySelector(".item-row");
-        const badge = document.createElement("span");
-        badge.className = `status-badge ${item.status}`;
-        badge.textContent = getStatusLabel(item.status);
-        wrapper.querySelector(".item-info").appendChild(badge);
+const statusDropdown = createStatusDropdown(item, "income");
+wrapper.querySelector(".item-info").appendChild(statusDropdown);
 
         incomesList.appendChild(row);
       });
@@ -2100,11 +2238,9 @@ function renderAccountTab() {
           () => removeOutflowById(item.id)
         );
 
-        const wrapper = row.querySelector(".item-row");
-        const badge = document.createElement("span");
-        badge.className = `status-badge ${item.status}`;
-        badge.textContent = getStatusLabel(item.status);
-        wrapper.querySelector(".item-info").appendChild(badge);
+          const wrapper = row.querySelector(".item-row");
+          const statusDropdown = createStatusDropdown(item, "outflow");
+          wrapper.querySelector(".item-info").appendChild(statusDropdown);
 
         outflowsList.appendChild(row);
       });
@@ -2573,7 +2709,9 @@ function renderSummaryTab() {
     ? getCounterpartyName(state.selectedCounterpartyId)
     : "todos os devedores / empresas";
 
-  const modeLabel = state.summaryProjectionMode === "current" ? "Cenário atual" : "Cenário projetado";
+  const modeLabel = state.summaryProjectionMode === "current"
+    ? "Cenário atual"
+    : "Cenário projetado";
 
   const section = document.createElement("div");
   section.className = "section-block";
@@ -2581,13 +2719,13 @@ function renderSummaryTab() {
   const grid = document.createElement("div");
   grid.className = "final-grid";
   grid.innerHTML = `
-    <div class="final-card"><span>Saldo inicial</span><strong>${formatCurrency(monthData.openingBalance)}</strong></div>
-    <div class="final-card"><span>Total recebido / previsto</span><strong>${formatCurrency(totals.totalIncome)}</strong></div>
-    <div class="final-card"><span>Total pago / previsto</span><strong>${formatCurrency(totals.totalOutflow)}</strong></div>
-    <div class="final-card"><span>Total das faturas</span><strong>${formatCurrency(totals.totalCards)}</strong></div>
-    <div class="final-card"><span>A receber pendente</span><strong>${formatCurrency(getPendingReceivableTotal())}</strong></div>
-    <div class="final-card"><span>A pagar pendente</span><strong>${formatCurrency(getPendingPayableTotal())}</strong></div>
-    <div class="final-card"><span>Guardar no mês</span><strong>${formatCurrency(monthData.saveGoal)}</strong></div>
+    <div class="final-card"><span>Entradas</span><strong>${formatCurrency(totals.totalIncome)}</strong></div>
+    <div class="final-card"><span>Saídas da conta</span><strong>${formatCurrency(totals.totalOutflow)}</strong></div>
+    <div class="final-card"><span>Faturas</span><strong>${formatCurrency(totals.totalCards)}</strong></div>
+    <div class="final-card"><span>Saídas totais</span><strong>${formatCurrency(totals.totalExpense)}</strong></div>
+    <div class="final-card"><span>A receber pendente</span><strong>${formatCurrency(totals.pendingReceivable)}</strong></div>
+    <div class="final-card"><span>A pagar pendente</span><strong>${formatCurrency(totals.pendingPayable)}</strong></div>
+    <div class="final-card"><span>Guardar no mês</span><strong>${formatCurrency(monthData.savedThisMonth || 0)}</strong></div>
     <div class="final-card"><span>Restante</span><strong>${formatCurrency(totals.remaining)}</strong></div>
     <div class="final-card final-big"><span>Livre para gastar</span><strong>${formatCurrency(totals.freeToSpend)}</strong></div>
   `;
@@ -2601,17 +2739,26 @@ function renderSummaryTab() {
 
   const formula = document.createElement("div");
   formula.className = "note-box";
-  formula.innerHTML = `
-    <strong>Fórmula do resumo:</strong><br>
-    Saldo inicial + Entradas filtradas - Saídas filtradas - Faturas - Guardado = Livre para gastar
-  `;
+
+  if (state.summaryProjectionMode === "projected") {
+    formula.innerHTML = `
+      <strong>Fórmula do resumo:</strong><br>
+      (Entradas + A receber) - (Saídas da conta + Faturas + A pagar) = Restante<br>
+      Restante - Guardado no mês = Livre para gastar
+    `;
+  } else {
+    formula.innerHTML = `
+      <strong>Fórmula do resumo:</strong><br>
+      Entradas - (Saídas da conta + Faturas) = Restante<br>
+      Restante - Guardado no mês = Livre para gastar
+    `;
+  }
 
   const categoryCard = document.createElement("div");
   categoryCard.className = "inner-card";
   categoryCard.innerHTML = `<div class="section-title">Categorias com maior saída no mês</div>`;
 
-
-    const catList = document.createElement("div");
+  const catList = document.createElement("div");
   catList.className = "item-list";
   catList.style.marginTop = "14px";
 
@@ -3577,3 +3724,31 @@ renderApp();
 if (!state.onboardingSeen) {
   setTimeout(() => openOnboarding(true), 250);
 }
+
+function forceAppScaleNormal() {
+  document.documentElement.style.zoom = "";
+  document.body.style.zoom = "";
+
+  document.documentElement.style.transform = "";
+  document.documentElement.style.transformOrigin = "";
+
+  const viewport = document.querySelector('meta[name="viewport"]');
+  if (viewport) {
+    viewport.setAttribute(
+      "content",
+      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    );
+  }
+}
+
+// Quando abre a aplicação
+window.addEventListener("load", () => {
+  forceAppScaleNormal();
+});
+
+// Quando volta para a aba
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    forceAppScaleNormal();
+  }
+});

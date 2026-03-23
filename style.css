@@ -1432,3 +1432,55 @@ textarea {
     padding: 9px 12px;
   }
 }
+
+.status-dropdown {
+  margin-top: 10px;
+  width: fit-content;
+  min-width: 150px;
+  max-width: 190px;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  outline: none;
+  cursor: pointer;
+  transition: .2s ease;
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+}
+
+.status-dropdown:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255,255,255,0.18);
+}
+
+.status-dropdown:focus {
+  border-color: rgba(183, 148, 255, 0.75);
+  box-shadow: 0 0 0 3px rgba(183, 148, 255, 0.15);
+}
+
+.status-dropdown.received,
+.status-dropdown.paid {
+  background: rgba(28, 185, 120, 0.14);
+  color: #8df0b8;
+  border-color: rgba(28, 185, 120, 0.30);
+}
+
+.status-dropdown.pending {
+  background: rgba(255, 176, 32, 0.14);
+  color: #ffd27a;
+  border-color: rgba(255, 176, 32, 0.30);
+}
+
+.status-dropdown.not_received,
+.status-dropdown.not_paid {
+  background: rgba(255, 93, 93, 0.14);
+  color: #ff9d9d;
+  border-color: rgba(255, 93, 93, 0.30);
+}
+
+.status-dropdown option {
+  background: #1b1529;
+  color: #ffffff;
+}
