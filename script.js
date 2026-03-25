@@ -310,6 +310,11 @@ function formatCurrency(value) {
   });
 }
 
+function toSafeNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function shortCurrency(value) {
   const num = Number(value || 0);
   if (Math.abs(num) >= 1000) return `R$ ${(num / 1000).toFixed(1)}k`;
@@ -980,7 +985,9 @@ function getTotals(monthData = getSelectedMonthData(), monthKey = state.selected
   const filteredIncomes = getFilteredMonthIncomes(monthData);
   const filteredOutflows = getFilteredMonthOutflows(monthData);
 
-  const totalIncome = filteredIncomes.reduce((acc, item) => acc + Number(item.amount || 0), 0);
+  const openingBalance = Number(monthData.openingBalance || 0);
+
+  const totalIncome = filteredIncomes.reduce((acc, item) => acc + toSafeNumber(item.amount), 0);
   const totalOutflow = filteredOutflows.reduce((acc, item) => acc + Number(item.amount || 0), 0);
   const totalCards = getFilteredCardTotal(monthKey);
 
@@ -988,11 +995,13 @@ function getTotals(monthData = getSelectedMonthData(), monthKey = state.selected
   const pendingPayable = getPendingPayableTotal(monthKey);
 
   const savedThisMonth = Number(monthData.savedThisMonth || 0);
+  const saveGoal = Number(monthData.saveGoal || 0);
 
   const totalExpense = totalOutflow + totalCards;
 
-  const currentBalance = totalIncome - totalExpense;
-  const projectedBalance = (totalIncome + pendingReceivable) - (totalExpense + pendingPayable);
+  const currentBalance = openingBalance + totalIncome - totalExpense;
+  const projectedBalance =
+    openingBalance + totalIncome + pendingReceivable - totalExpense - pendingPayable;
 
   const balanceByMode =
     state.summaryProjectionMode === "projected"
@@ -1003,13 +1012,14 @@ function getTotals(monthData = getSelectedMonthData(), monthKey = state.selected
   const dailyFree = freeToSpend / endOfMonthDaysRemaining(monthKey);
 
   return {
-    openingBalance: Number(monthData.openingBalance || 0),
+    openingBalance,
     totalIncome,
     totalOutflow,
     totalCards,
     totalExpense,
     pendingReceivable,
     pendingPayable,
+    saveGoal,
     savedThisMonth,
     currentBalance,
     projectedBalance,
