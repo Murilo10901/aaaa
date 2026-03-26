@@ -156,29 +156,24 @@ const closeWelcomeMonthBtn = document.getElementById("closeWelcomeMonthBtn");
 const closeWelcomeMonthBackdrop = document.getElementById("closeWelcomeMonthBackdrop");
 const howToUseBtn = document.getElementById("howToUseBtn");
 const menuToggleBtn = document.getElementById("menuToggleBtn");
-
 const monthSelect = document.getElementById("monthSelect");
 const prevMonthBtn = document.getElementById("prevMonthBtn");
 const nextMonthBtn = document.getElementById("nextMonthBtn");
 const createMonthBtn = document.getElementById("createMonthBtn");
 const duplicateMonthBtn = document.getElementById("duplicateMonthBtn");
-
 const cardCarousel = document.getElementById("cardCarousel");
 const createCardQuickBtn = document.getElementById("createCardQuickBtn");
 const editSelectedCardQuickBtn = document.getElementById("editSelectedCardQuickBtn");
 const showAllCardsBtn = document.getElementById("showAllCardsBtn");
-
 const counterpartyCarousel = document.getElementById("counterpartyCarousel");
 const clearCounterpartyFilterBtn = document.getElementById("clearCounterpartyFilterBtn");
 const openCounterpartiesTabBtn = document.getElementById("openCounterpartiesTabBtn");
-
 const dashOpening = document.getElementById("dashOpening");
 const dashIncome = document.getElementById("dashIncome");
 const dashOutflow = document.getElementById("dashOutflow");
 const dashCards = document.getElementById("dashCards");
 const dashFree = document.getElementById("dashFree");
 const dashDaily = document.getElementById("dashDaily");
-
 const sumIncome = document.getElementById("sumIncome");
 const sumOutflow = document.getElementById("sumOutflow");
 const sumCards = document.getElementById("sumCards");
@@ -189,7 +184,6 @@ const sumRemaining = document.getElementById("sumRemaining");
 const sumFree = document.getElementById("sumFree");
 const assistantMessage = document.getElementById("assistantMessage");
 const monthAlerts = document.getElementById("monthAlerts");
-
 const summaryFilterAllBtn = document.getElementById("summaryFilterAllBtn");
 const summaryFilterSelectedBtn = document.getElementById("summaryFilterSelectedBtn");
 const summaryModeCurrentBtn = document.getElementById("summaryModeCurrentBtn");
@@ -198,19 +192,15 @@ const summaryStatusAllBtn = document.getElementById("summaryStatusAllBtn");
 const summaryStatusSettledBtn = document.getElementById("summaryStatusSettledBtn");
 const summaryStatusPendingBtn = document.getElementById("summaryStatusPendingBtn");
 const summaryCounterpartySelect = document.getElementById("summaryCounterpartySelect");
-
 const mainTabs = document.getElementById("mainTabs");
 const tabContent = document.getElementById("tabContent");
-
 const chartTitle = document.getElementById("chartTitle");
 const chartLegend = document.getElementById("chartLegend");
 const financeChart = document.getElementById("financeChart");
 const chartTabs = [...document.querySelectorAll(".chart-tab")];
-
 const sideMenu = document.getElementById("sideMenu");
 const sideMenuBackdrop = document.getElementById("sideMenuBackdrop");
-const closeMenuBtn = document.getElementById("closeMenuBtn");
-
+const closeMenuBtn = document.getElementById("closeMenuBtn")
 const menuProfileImage = document.getElementById("menuProfileImage");
 const menuProfileFallback = document.getElementById("menuProfileFallback");
 const menuProfileName = document.getElementById("menuProfileName");
@@ -218,7 +208,6 @@ const menuProfileEmail = document.getElementById("menuProfileEmail");
 const menuCurrentMonthLabel = document.getElementById("menuCurrentMonthLabel");
 const menuFreeValue = document.getElementById("menuFreeValue");
 const menuSavingsPotValue = document.getElementById("menuSavingsPotValue");
-
 const openProfileBtn = document.getElementById("openProfileBtn");
 const openImportBtn = document.getElementById("openImportBtn");
 const exportTxtBtn = document.getElementById("exportTxtBtn");
@@ -227,19 +216,16 @@ const copySummaryBtn = document.getElementById("copySummaryBtn");
 const applyFixedValuesBtn = document.getElementById("applyFixedValuesBtn");
 const resetBtn = document.getElementById("resetBtn");
 const logoutAppBtn = document.getElementById("logoutAppBtn");
-
 const importModal = document.getElementById("importModal");
 const closeImportBtn = document.getElementById("closeImportBtn");
 const closeImportBackdrop = document.getElementById("closeImportBackdrop");
 const applyImportBtn = document.getElementById("applyImportBtn");
 const clearImportBtn = document.getElementById("clearImportBtn");
 const importText = document.getElementById("importText");
-
 const profileModal = document.getElementById("profileModal");
 const closeProfileBtn = document.getElementById("closeProfileBtn");
 const closeProfileBackdrop = document.getElementById("closeProfileBackdrop");
 const saveProfileBtn = document.getElementById("saveProfileBtn");
-
 const profileNameInput = document.getElementById("profileNameInput");
 const profilePhotoInput = document.getElementById("profilePhotoInput");
 const fixedSalaryInput = document.getElementById("fixedSalaryInput");
@@ -253,7 +239,6 @@ const addFixedIncomeBtn = document.getElementById("addFixedIncomeBtn");
 const addFixedExpenseBtn = document.getElementById("addFixedExpenseBtn");
 const fixedIncomeList = document.getElementById("fixedIncomeList");
 const fixedExpenseList = document.getElementById("fixedExpenseList");
-
 const onboardingModal = document.getElementById("onboardingModal");
 const onboardingCounter = document.getElementById("onboardingCounter");
 const onboardingProgressFill = document.getElementById("onboardingProgressFill");
@@ -266,7 +251,6 @@ const onboardingNameInput = document.getElementById("onboardingNameInput");
 const skipOnboardingBtn = document.getElementById("skipOnboardingBtn");
 const prevOnboardingBtn = document.getElementById("prevOnboardingBtn");
 const nextOnboardingBtn = document.getElementById("nextOnboardingBtn");
-
 const itemRowTemplate = document.getElementById("itemRowTemplate");
 
 // UTILS
@@ -303,20 +287,32 @@ function shiftMonth(monthKey, offset) {
 }
 
 function formatCurrency(value) {
-  const number = Number(value || 0);
+  const number = toSafeNumber(value);
   return number.toLocaleString("pt-BR", {
     style: "currency",
     currency: "BRL"
   });
 }
-
 function toSafeNumber(value) {
-  const n = Number(value);
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (value == null || value === "") return 0;
+
+  const normalized = String(value)
+    .trim()
+    .replace(/\s/g, "")
+    .replace(/R\$/gi, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+
+  const n = Number(normalized);
   return Number.isFinite(n) ? n : 0;
 }
 
 function shortCurrency(value) {
-  const num = Number(value || 0);
+  const num = toSafeNumber(value);
   if (Math.abs(num) >= 1000) return `R$ ${(num / 1000).toFixed(1)}k`;
   return `R$ ${num.toFixed(0)}`;
 }
@@ -430,26 +426,35 @@ function ensureMonthShape(monthData) {
 
   const normalizeIncome = (item) => ({
     ...item,
+    amount: toSafeNumber(item?.amount),
     status: item?.status || "received",
     counterpartyId: item?.counterpartyId || ""
   });
 
   const normalizeOutflow = (item) => ({
     ...item,
+    amount: toSafeNumber(item?.amount),
     status: item?.status || "paid",
     counterpartyId: item?.counterpartyId || ""
   });
 
   return {
-    openingBalance: Number(monthData.openingBalance || 0),
+    openingBalance: toSafeNumber(monthData.openingBalance),
     incomes: Array.isArray(monthData.incomes) ? monthData.incomes.map(normalizeIncome) : [],
     outflows: Array.isArray(monthData.outflows) ? monthData.outflows.map(normalizeOutflow) : [],
-    cardPurchases: Array.isArray(monthData.cardPurchases) ? monthData.cardPurchases : [],
+    cardPurchases: Array.isArray(monthData.cardPurchases)
+      ? monthData.cardPurchases.map((item) => ({
+          ...item,
+          totalAmount: toSafeNumber(item?.totalAmount)
+        }))
+      : [],
     manualInvoices: monthData.manualInvoices && typeof monthData.manualInvoices === "object"
-      ? monthData.manualInvoices
+      ? Object.fromEntries(
+          Object.entries(monthData.manualInvoices).map(([key, value]) => [key, toSafeNumber(value)])
+        )
       : {},
-    saveGoal: Number(monthData.saveGoal || 0),
-    savedThisMonth: Number(monthData.savedThisMonth || 0)
+    saveGoal: toSafeNumber(monthData.saveGoal),
+    savedThisMonth: toSafeNumber(monthData.savedThisMonth)
   };
 }
 
@@ -731,14 +736,14 @@ function getPendingReceivableTotal(monthKey = state.selectedMonthKey) {
   const monthData = ensureMonthShape(state.months[monthKey]);
   return (monthData.incomes || [])
     .filter((item) => matchesCounterpartyFilter(item) && (item.status === "pending" || item.status === "not_received"))
-    .reduce((acc, item) => acc + Number(item.amount || 0), 0);
+    .reduce((acc, item) => acc + toSafeNumber(item.amount), 0);
 }
 
 function getPendingPayableTotal(monthKey = state.selectedMonthKey) {
   const monthData = ensureMonthShape(state.months[monthKey]);
   return (monthData.outflows || [])
     .filter((item) => matchesCounterpartyFilter(item) && (item.status === "pending" || item.status === "not_paid"))
-    .reduce((acc, item) => acc + Number(item.amount || 0), 0);
+    .reduce((acc, item) => acc + toSafeNumber(item.amount), 0);
 }
 
 function getCounterpartyResume(counterpartyId) {
@@ -750,14 +755,14 @@ function getCounterpartyResume(counterpartyId) {
   Object.values(state.months).forEach((monthData) => {
     ensureMonthShape(monthData).incomes.forEach((item) => {
       if (item.counterpartyId !== counterpartyId) return;
-      if (item.status === "received") settledReceivable += Number(item.amount || 0);
-      else receivable += Number(item.amount || 0);
+      if (item.status === "received") settledReceivable += toSafeNumber(item.amount);
+      else receivable += toSafeNumber(item.amount);
     });
 
     ensureMonthShape(monthData).outflows.forEach((item) => {
       if (item.counterpartyId !== counterpartyId) return;
-      if (item.status === "paid") settledPayable += Number(item.amount || 0);
-      else payable += Number(item.amount || 0);
+      if (item.status === "paid") settledPayable += toSafeNumber(item.amount);
+      else payable += toSafeNumber(item.amount);
     });
   });
 
@@ -984,30 +989,22 @@ function getFilteredCardTotal(monthKey = state.selectedMonthKey) {
 function getTotals(monthData = getSelectedMonthData(), monthKey = state.selectedMonthKey) {
   const filteredIncomes = getFilteredMonthIncomes(monthData);
   const filteredOutflows = getFilteredMonthOutflows(monthData);
-
-  const openingBalance = Number(monthData.openingBalance || 0);
-
+  const openingBalance = toSafeNumber(monthData.openingBalance);
   const totalIncome = filteredIncomes.reduce((acc, item) => acc + toSafeNumber(item.amount), 0);
-  const totalOutflow = filteredOutflows.reduce((acc, item) => acc + Number(item.amount || 0), 0);
+  const totalOutflow = filteredOutflows.reduce((acc, item) => acc + toSafeNumber(item.amount), 0);
   const totalCards = getFilteredCardTotal(monthKey);
-
   const pendingReceivable = getPendingReceivableTotal(monthKey);
   const pendingPayable = getPendingPayableTotal(monthKey);
-
-  const savedThisMonth = Number(monthData.savedThisMonth || 0);
-  const saveGoal = Number(monthData.saveGoal || 0);
-
+  const savedThisMonth = toSafeNumber(monthData.savedThisMonth);
+  const saveGoal = toSafeNumber(monthData.saveGoal);
   const totalExpense = totalOutflow + totalCards;
-
-  const currentBalance = openingBalance + totalIncome - totalExpense;
+  const currentBalance = totalIncome - totalExpense;
   const projectedBalance =
-    openingBalance + totalIncome + pendingReceivable - totalExpense - pendingPayable;
-
+  totalIncome + pendingReceivable - totalExpense - pendingPayable;
   const balanceByMode =
     state.summaryProjectionMode === "projected"
       ? projectedBalance
       : currentBalance;
-
   const freeToSpend = balanceByMode - savedThisMonth;
   const dailyFree = freeToSpend / endOfMonthDaysRemaining(monthKey);
 
@@ -1031,10 +1028,10 @@ function getTotals(monthData = getSelectedMonthData(), monthKey = state.selected
 
 function getSavingsPotTotal() {
   const monthlySaved = Object.values(state.months).reduce(
-    (acc, monthData) => acc + Number(monthData.savedThisMonth || 0),
+    (acc, monthData) => acc + toSafeNumber(monthData.savedThisMonth),
     0
   );
-  return Number(state.profile.savingsPotBase || 0) + monthlySaved;
+  return toSafeNumber(state.profile.savingsPotBase) + monthlySaved;
 }
 
 function getCategoryBreakdown(monthKey = state.selectedMonthKey) {
@@ -1045,20 +1042,19 @@ function getCategoryBreakdown(monthKey = state.selectedMonthKey) {
 
   getFilteredMonthOutflows(monthData).forEach((item) => {
     const cat = item.category || "Outros";
-    map.set(cat, (map.get(cat) || 0) + Number(item.amount || 0));
+    map.set(cat, (map.get(cat) || 0) + toSafeNumber(item.amount));
   });
 
   const cardFilter = state.summaryCardFilter === "selected" ? state.selectedCardId || "all" : "all";
   getInstallmentsForMonth(monthKey, cardFilter).forEach((item) => {
     const cat = item.category || "Outros";
-    map.set(cat, (map.get(cat) || 0) + Number(item.amount || 0));
+    map.set(cat, (map.get(cat) || 0) + toSafeNumber(item.amount));
   });
 
   return [...map.entries()]
     .map(([category, amount]) => ({ category, amount }))
     .sort((a, b) => b.amount - a.amount);
 }
-
 function getMonthAlerts() {
   const monthData = getSelectedMonthData();
   const alerts = [];
@@ -1883,32 +1879,24 @@ function updateDashboard() {
   dashCards.textContent = formatCurrency(totals.totalCards);
   dashFree.textContent = formatCurrency(totals.freeToSpend);
   dashDaily.textContent = formatCurrency(totals.dailyFree);
-
   sumIncome.textContent = formatCurrency(totals.totalIncome);
   sumOutflow.textContent = formatCurrency(totals.totalOutflow);
   sumCards.textContent = formatCurrency(totals.totalCards);
-  sumSaveGoal.textContent = formatCurrency(monthData.savedThisMonth || 0);
-
+  sumSaveGoal.textContent = formatCurrency(totals.savedThisMonth);
   sumPendingReceivable.textContent = formatCurrency(totals.pendingReceivable);
   sumPendingPayable.textContent = formatCurrency(totals.pendingPayable);
-
   sumRemaining.textContent = formatCurrency(totals.remaining);
   sumFree.textContent = formatCurrency(totals.freeToSpend);
-
   sumRemaining.parentElement.classList.toggle("negative", totals.remaining < 0);
   sumFree.parentElement.classList.toggle("negative", totals.freeToSpend < 0);
-
   summaryFilterAllBtn.classList.toggle("active", state.summaryCardFilter === "all");
   summaryFilterSelectedBtn.classList.toggle("active", state.summaryCardFilter === "selected");
   summaryFilterSelectedBtn.disabled = !state.selectedCardId;
-
   summaryModeCurrentBtn.classList.toggle("active", state.summaryProjectionMode === "current");
   summaryModeProjectedBtn.classList.toggle("active", state.summaryProjectionMode === "projected");
-
   summaryStatusAllBtn.classList.toggle("active", state.summaryStatusFilter === "all");
   summaryStatusSettledBtn.classList.toggle("active", state.summaryStatusFilter === "settled");
   summaryStatusPendingBtn.classList.toggle("active", state.summaryStatusFilter === "pending");
-
   renderSummaryCounterpartySelect();
 }
 
@@ -2735,7 +2723,7 @@ function renderSummaryTab() {
     <div class="final-card"><span>Saídas totais</span><strong>${formatCurrency(totals.totalExpense)}</strong></div>
     <div class="final-card"><span>A receber pendente</span><strong>${formatCurrency(totals.pendingReceivable)}</strong></div>
     <div class="final-card"><span>A pagar pendente</span><strong>${formatCurrency(totals.pendingPayable)}</strong></div>
-    <div class="final-card"><span>Guardar no mês</span><strong>${formatCurrency(monthData.savedThisMonth || 0)}</strong></div>
+    <div class="final-card"><span>Guardar no mês</span><strong>${formatCurrency(totals.savedThisMonth)}</strong></div>
     <div class="final-card"><span>Restante</span><strong>${formatCurrency(totals.remaining)}</strong></div>
     <div class="final-card final-big"><span>Livre para gastar</span><strong>${formatCurrency(totals.freeToSpend)}</strong></div>
   `;
