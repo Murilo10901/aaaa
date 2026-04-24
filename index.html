@@ -17,15 +17,15 @@
       --line-soft:rgba(255,255,255,.05);
       --text:#f5f3ff;
       --muted:#b7afcb;
-      --primary:#8b5cf6;
-      --primary-2:#6d28d9;
+      --primary:#16c95f;
+      --primary-2:#08a84e;
       --primary-soft:rgba(139,92,246,.18);
       --danger:#ef4444;
       --success:#22c55e;
-      --welcome-1:#4d006a;
-      --welcome-2:#8f007d;
-      --welcome-3:#dd008f;
-      --welcome-4:#ff4ca6;
+      --welcome-1:#052e1a;
+      --welcome-2:#08753d;
+      --welcome-3:#16c95f;
+      --welcome-4:#8fffc0;
       --radius:30px;
       --radius-2:18px;
       --shadow:0 24px 60px rgba(0,0,0,.35);
@@ -520,6 +520,12 @@
         grid-template-columns:1fr 1fr;
       }
     }
+  
+    .welcome-card{background:linear-gradient(160deg,#052e1a 0%,#08753d 48%,#16c95f 100%)}
+    .btn-primary,.tabs button.active{background:linear-gradient(90deg,#16c95f,#08a84e)}
+    .btn-welcome{background:#fff;color:#08753d}
+    input:focus{border-color:rgba(22,201,95,.62);box-shadow:0 0 0 4px rgba(22,201,95,.14)}
+    .hero-avatar::before{background:#16c95f;box-shadow:0 86px 0 18px #16c95f}
   </style>
 </head>
 <body>
@@ -534,10 +540,9 @@
 
           <div class="welcome-center">
             <div class="hero-avatar"></div>
-            <h1>WELCOME</h1>
+            <h1>AAA FINANCE</h1>
             <p>
-              Seu controle financeiro pessoal com sincronização na nuvem,
-              login seguro e dados vinculados somente à sua conta.
+              Seu app financeiro pessoal com dashboard, lançamentos por dia, cartões, pendências e sincronização segura na nuvem.
             </p>
           </div>
 

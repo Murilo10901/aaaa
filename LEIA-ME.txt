@@ -1,0 +1,21 @@
+AAA Finance V3 - reformulação visual
+
+Arquivos:
+- index.html: login original mantido
+- app.html: app reformulado com navegação Principal / Transações / Planejamento / Mais
+- style.css: novo visual responsivo com correção de quebra do front
+- script.js: nova lógica de telas, botão + com animação, listas por dia, devedores, cartões e resumos
+- reset-password.html: recuperação de senha original mantida
+
+Principais mudanças:
+1. Corrigida a quebra do layout no mobile/tablet/desktop.
+2. Botão + agora abre opções animadas: Receita, Despesa, Cartão e Devedor.
+3. Tela de Transações refeita no modelo da print: lista por dia, mês no topo, saldo e balanço.
+4. Devedores/empresas voltaram em Mais e em Planejamento > Devedores.
+5. Planejamento ganhou resumo por gráfico, cartão, categoria e devedores.
+6. Mantida a estrutura de dados: months, incomes, outflows, cardPurchases, cards e counterparties.
+
+Como aplicar:
+- Faça backup do seu projeto atual.
+- Substitua os arquivos pelo conteúdo deste ZIP.
+- Suba novamente no Netlify ou no seu servidor.
