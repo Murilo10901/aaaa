@@ -1,21 +1,37 @@
-AAA Finance V3 - reformulação visual
+AAA Finance — V3 com migração de dados
 
-Arquivos:
-- index.html: login original mantido
-- app.html: app reformulado com navegação Principal / Transações / Planejamento / Mais
-- style.css: novo visual responsivo com correção de quebra do front
-- script.js: nova lógica de telas, botão + com animação, listas por dia, devedores, cartões e resumos
-- reset-password.html: recuperação de senha original mantida
+Arquivos do pacote:
+- index.html
+- app.html
+- style.css
+- script.js
+- reset-password.html
 
-Principais mudanças:
-1. Corrigida a quebra do layout no mobile/tablet/desktop.
-2. Botão + agora abre opções animadas: Receita, Despesa, Cartão e Devedor.
-3. Tela de Transações refeita no modelo da print: lista por dia, mês no topo, saldo e balanço.
-4. Devedores/empresas voltaram em Mais e em Planejamento > Devedores.
-5. Planejamento ganhou resumo por gráfico, cartão, categoria e devedores.
-6. Mantida a estrutura de dados: months, incomes, outflows, cardPurchases, cards e counterparties.
+O que esta versão faz:
+1. Mantém o login e a proteção de dados.
+2. Migra automaticamente dados antigos ao abrir o app.
+3. Cria uma conta padrão chamada "Carteira • Conta principal" quando existirem lançamentos antigos sem conta/cartão vinculado.
+4. Corrige entradas antigas sem accountId.
+5. Corrige despesas antigas sem accountId.
+6. Corrige compras de cartão antigas sem cardId.
+7. Mantém IDs antigos quando já existirem.
+8. Cria IDs internos apenas para registros antigos que não tinham ID.
+9. Mantém o histórico financeiro, sem apagar transações.
+10. Salva o estado migrado automaticamente no localStorage e no Supabase quando o usuário abre o app.
 
-Como aplicar:
-- Faça backup do seu projeto atual.
-- Substitua os arquivos pelo conteúdo deste ZIP.
-- Suba novamente no Netlify ou no seu servidor.
+Regra principal da migração:
+- Todo lançamento antigo sem conta/cartão vai para: Carteira • Conta principal.
+- Cartões antigos continuam aparecendo.
+- Devedores antigos continuam aparecendo.
+- Transações vinculadas a devedores continuam sendo lidas pelo ID do devedor.
+
+Como usar:
+1. Faça backup dos arquivos atuais.
+2. Substitua os arquivos do projeto por estes arquivos.
+3. Abra o app com um usuário que já tinha dados antigos.
+4. Veja em "Todas" se aparecem todas as transações.
+5. Veja em "Carteira • Conta principal" os lançamentos antigos sem conta/cartão.
+6. Novas receitas/despesas já poderão ser cadastradas escolhendo a conta/cartão.
+
+Observação importante:
+A migração roda uma vez de forma automática, mas ela é segura para rodar mais vezes. Ela não apaga histórico.

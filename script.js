@@ -7,6 +7,8 @@
   const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
   const today=()=>new Date().toISOString().slice(0,10);
   const monthKey=()=>new Date().toISOString().slice(0,7);
+  const MAIN_ACCOUNT_ID = 'main-account';
+  const DATA_SCHEMA_VERSION = 4;
   const state = normalize(loadInitial());
   let saveTimer=null;
   let activeScreen=state.activeScreen||'home';
@@ -15,17 +17,183 @@
   function loadInitial(){
     try { return BOOT.initialState || JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}'); } catch { return {}; }
   }
+  function asArray(v){ return Array.isArray(v) ? v : []; }
+  function asObject(v){ return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; }
+  function asNumber(v){
+    if(typeof v === 'number') return Number.isFinite(v) ? v : 0;
+    if(typeof v === 'string') return Number(v.replace(/\s/g,'').replace(/R\$/gi,'').replace(/\./g,'').replace(',','.')) || 0;
+    return Number(v||0) || 0;
+  }
+  function normalizeText(v,fallback=''){ return String(v ?? fallback).trim(); }
+  function normalizeTxDate(tx, fallbackMonth){
+    const raw = tx.date || tx.data || tx.dueDate || tx.createdAt || tx.purchaseDate || '';
+    if(/^\d{4}-\d{2}-\d{2}/.test(String(raw))) return String(raw).slice(0,10);
+    if(/^\d{2}\/\d{2}\/\d{4}$/.test(String(raw))){
+      const [d,m,y]=String(raw).split('/'); return `${y}-${m}-${d}`;
+    }
+    return `${fallbackMonth || monthKey()}-01`;
+  }
+  function inferMonthFromItem(tx, fallbackMonth){
+    const d = normalizeTxDate(tx, fallbackMonth);
+    return d.slice(0,7) || fallbackMonth || monthKey();
+  }
+  function normalizeStatus(tx, kind){
+    const raw = String(tx.status || tx.situacao || '').toLowerCase();
+    if(['received','recebido','recebida','pago','paid'].includes(raw)) return kind==='income' ? 'received' : 'paid';
+    if(['not_received','nao_recebido','não recebido','não_recebido'].includes(raw)) return 'not_received';
+    if(['not_paid','nao_pago','não pago','não_pago'].includes(raw)) return 'not_paid';
+    if(['pending','pendente','aberto'].includes(raw)) return 'pending';
+    return kind==='income' ? 'received' : 'paid';
+  }
+  function createMainAccount(openingBalance=0){
+    return {id:MAIN_ACCOUNT_ID, bank:'Carteira', name:'Conta principal', dueDay:10, closingDay:25, openingBalance:asNumber(openingBalance), color:'#7c3aed', migrated:true};
+  }
+  function normalizeMonthsContainer(raw, selectedMonth, migration){
+    const aliases = raw.months || raw.meses || raw.monthData || raw.dataByMonth || raw.financeByMonth || {};
+    const months = asObject(aliases);
+    const out = {};
+    Object.entries(months).forEach(([k,v])=>{
+      if(/^\d{4}-\d{2}$/.test(k)) out[k]=asObject(v);
+    });
+
+    const rootIncomes = asArray(raw.incomes || raw.receitas || raw.entradas);
+    const rootOutflows = asArray(raw.outflows || raw.expenses || raw.despesas || raw.saidas || raw.gastos);
+    const rootCards = asArray(raw.cardPurchases || raw.card_purchases || raw.comprasCartao || raw.compras_cartao);
+    const rootTransactions = asArray(raw.transactions || raw.transacoes || raw.lancamentos);
+
+    function ensure(k){ if(!out[k]) out[k]={openingBalance:0,incomes:[],outflows:[],cardPurchases:[],manualInvoices:{},saveGoal:0,savedThisMonth:0}; return out[k]; }
+
+    rootIncomes.forEach(item=>{ const k=inferMonthFromItem(item,selectedMonth); ensure(k).incomes.push(item); migration.applied=true; migration.rootItemsMoved++; });
+    rootOutflows.forEach(item=>{ const k=inferMonthFromItem(item,selectedMonth); ensure(k).outflows.push(item); migration.applied=true; migration.rootItemsMoved++; });
+    rootCards.forEach(item=>{ const k=inferMonthFromItem(item,selectedMonth); ensure(k).cardPurchases.push(item); migration.applied=true; migration.rootItemsMoved++; });
+    rootTransactions.forEach(item=>{
+      const rawType=String(item.type || item.tipo || item.kind || '').toLowerCase();
+      const k=inferMonthFromItem(item,selectedMonth); const m=ensure(k);
+      if(['income','receita','entrada','in'].includes(rawType)) m.incomes.push(item);
+      else if(['card','cartao','cartão','credit','credito','crédito'].includes(rawType)) m.cardPurchases.push(item);
+      else m.outflows.push(item);
+      migration.applied=true; migration.rootItemsMoved++;
+    });
+
+    if(!Object.keys(out).length) out[selectedMonth]={openingBalance:asNumber(raw.openingBalance || raw.initialBalance || raw.saldoInicial || raw.balance),incomes:[],outflows:[],cardPurchases:[],manualInvoices:{},saveGoal:0,savedThisMonth:0};
+    return out;
+  }
   function normalize(s){
+    const raw = s && typeof s === 'object' ? s : {};
     const now=monthKey();
+    const selectedMonth = raw.selectedMonthKey || raw.selectedMonth || raw.currentMonth || now;
+    const migration = {version:DATA_SCHEMA_VERSION, applied:false, needsSave:false, createdMainAccount:false, fixedTransactions:0, fixedCards:0, fixedCounterparties:0, rootItemsMoved:0, orphanCardPurchases:0};
+
+    let cards = asArray(raw.cards || raw.cartoes || raw.accounts || raw.contas).map((c)=>{
+      const id = normalizeText(c.id || c.cardId || c.accountId || c.uuid, uid());
+      if(!c.id && !c.cardId && !c.accountId) migration.fixedCards++;
+      return {
+        ...c,
+        id,
+        bank:normalizeText(c.bank || c.banco || c.accountName || c.nomeBanco || c.name, 'Conta'),
+        name:normalizeText(c.name || c.apelido || c.nickname || c.cardName, 'Principal'),
+        dueDay:asNumber(c.dueDay || c.vencimento || c.diaVencimento || 10) || 10,
+        closingDay:asNumber(c.closingDay || c.fechamento || c.diaFechamento || 25) || 25,
+        openingBalance:asNumber(c.openingBalance || c.saldoInicial || c.balance || c.saldo || 0),
+        color:c.color || c.cor || '#7c3aed'
+      };
+    });
+    const cardIds = new Set(cards.map(c=>c.id));
+    const needsDefaultAccount = !cards.length;
+    if(needsDefaultAccount){ cards.unshift(createMainAccount(raw.openingBalance || raw.initialBalance || raw.saldoInicial || raw.balance)); cardIds.add(MAIN_ACCOUNT_ID); migration.createdMainAccount=true; migration.applied=true; }
+
+    const months = normalizeMonthsContainer(raw, selectedMonth, migration);
+    function ensureMainAccount(){
+      if(!cardIds.has(MAIN_ACCOUNT_ID)){
+        cards.unshift(createMainAccount(raw.openingBalance || raw.initialBalance || raw.saldoInicial || raw.balance));
+        cardIds.add(MAIN_ACCOUNT_ID); migration.createdMainAccount=true; migration.applied=true;
+      }
+      return MAIN_ACCOUNT_ID;
+    }
+    function normalizeTransaction(tx, kind, month){
+      const fallbackAccount = tx.accountId || tx.cardId || tx.account_id || tx.card_id || tx.contaId || tx.cartaoId || tx.card || tx.account;
+      let accountId = normalizeText(fallbackAccount, '');
+      if(!accountId || !cardIds.has(accountId)){
+        accountId = ensureMainAccount();
+        migration.fixedTransactions++;
+        migration.applied=true;
+      }
+      const id = normalizeText(tx.id || tx.txId || tx.transactionId || tx.uuid, uid());
+      if(!tx.id) { migration.fixedTransactions++; migration.applied=true; }
+      return {
+        ...tx,
+        id,
+        date:normalizeTxDate(tx, month),
+        description:normalizeText(tx.description || tx.descricao || tx.title || tx.nome, kind==='income'?'Receita':'Despesa'),
+        amount:asNumber(tx.amount ?? tx.valor ?? tx.value ?? tx.total ?? 0),
+        category:normalizeText(tx.category || tx.categoria || 'Outros','Outros'),
+        status:normalizeStatus(tx, kind),
+        method:normalizeText(tx.method || tx.metodo || tx.origem || 'Carteira','Carteira'),
+        accountId,
+        cardId: tx.cardId || tx.card_id || '',
+        counterpartyId:normalizeText(tx.counterpartyId || tx.debtorId || tx.devedorId || tx.counterparty_id || '', ''),
+        note:normalizeText(tx.note || tx.observation || tx.observacao || tx.obs || '', '')
+      };
+    }
+    function normalizeCardPurchase(p, month){
+      let cardId = normalizeText(p.cardId || p.accountId || p.card_id || p.account_id || p.cartaoId || p.contaId || '', '');
+      if(!cardId || !cardIds.has(cardId)){
+        cardId = ensureMainAccount();
+        migration.orphanCardPurchases++;
+        migration.applied=true;
+      }
+      const id = normalizeText(p.id || p.purchaseId || p.uuid, uid());
+      if(!p.id){ migration.fixedTransactions++; migration.applied=true; }
+      return {
+        ...p,
+        id,
+        cardId,
+        accountId:cardId,
+        purchaseDate:normalizeTxDate(p, month),
+        description:normalizeText(p.description || p.descricao || p.title || 'Compra no cartão','Compra no cartão'),
+        totalAmount:asNumber(p.totalAmount ?? p.amount ?? p.valor ?? p.value ?? 0),
+        installmentCount:Math.max(1,asNumber(p.installmentCount || p.parcelas || p.installments || 1) || 1),
+        category:normalizeText(p.category || p.categoria || 'Cartão','Cartão'),
+        status:p.status || 'paid',
+        counterpartyId:normalizeText(p.counterpartyId || p.debtorId || p.devedorId || '', ''),
+        note:normalizeText(p.note || p.observation || p.observacao || p.obs || '', '')
+      };
+    }
+
+    Object.entries(months).forEach(([k,m])=>{
+      const mm = asObject(m);
+      months[k]={
+        openingBalance:asNumber(mm.openingBalance || mm.saldoInicial || mm.initialBalance || 0),
+        incomes:asArray(mm.incomes || mm.receitas || mm.entradas).map(x=>normalizeTransaction(x,'income',k)),
+        outflows:asArray(mm.outflows || mm.expenses || mm.despesas || mm.saidas || mm.gastos).map(x=>normalizeTransaction(x,'expense',k)),
+        cardPurchases:asArray(mm.cardPurchases || mm.card_purchases || mm.comprasCartao || mm.compras_cartao).map(x=>normalizeCardPurchase(x,k)),
+        manualInvoices:asObject(mm.manualInvoices || mm.faturasManuais || {}),
+        saveGoal:asNumber(mm.saveGoal || mm.metaGuardar || 0),
+        savedThisMonth:asNumber(mm.savedThisMonth || mm.guardadoMes || 0)
+      };
+    });
+
+    const counterparties = asArray(raw.counterparties || raw.devedores || raw.debtors || raw.empresas).map(c=>{
+      const id=normalizeText(c.id || c.counterpartyId || c.devedorId || c.uuid, uid());
+      if(!c.id){ migration.fixedCounterparties++; migration.applied=true; }
+      return {...c,id,name:normalizeText(c.name || c.nome || c.razaoSocial || 'Devedor','Devedor'),note:normalizeText(c.note || c.observacao || c.obs || c.status || 'Pendência','Pendência'),accountId:normalizeText(c.accountId || c.contaId || '', '')};
+    });
+
+    const selectedCardId = cardIds.has(raw.selectedCardId) ? raw.selectedCardId : '';
+    if(raw.__schemaVersion !== DATA_SCHEMA_VERSION || migration.applied) migration.needsSave = true;
+
     return {
-      theme:s.theme||'dark',
-      activeScreen:s.activeScreen||'home',
-      selectedMonthKey:s.selectedMonthKey||s.selectedMonth||now,
-      selectedCardId:s.selectedCardId||'',
-      profile:{name:s.profile?.name||s.profile?.display_name||'Matheus', email:s.profile?.email||BOOT.user?.email||'', photo:s.profile?.photo||''},
-      cards:Array.isArray(s.cards)?s.cards.map(c=>({...c,id:c.id||uid(),bank:c.bank||'Conta',name:c.name||'Principal',dueDay:c.dueDay||10,closingDay:c.closingDay||25,openingBalance:Number(c.openingBalance||0),color:c.color||'#7c3aed'})):[],
-      counterparties:Array.isArray(s.counterparties)?s.counterparties:[],
-      months:s.months&&typeof s.months==='object'?s.months:{}
+      ...raw,
+      __schemaVersion: DATA_SCHEMA_VERSION,
+      __migration: migration,
+      theme:raw.theme||'dark',
+      activeScreen:raw.activeScreen||'home',
+      selectedMonthKey:selectedMonth,
+      selectedCardId,
+      profile:{name:raw.profile?.name||raw.profile?.display_name||'Matheus', email:raw.profile?.email||BOOT.user?.email||'', photo:raw.profile?.photo||'', fixedSalary:asNumber(raw.profile?.fixedSalary||0), defaultSaveGoal:asNumber(raw.profile?.defaultSaveGoal||0), savingsPotBase:asNumber(raw.profile?.savingsPotBase||0), fixedIncomes:asArray(raw.profile?.fixedIncomes), fixedOutflows:asArray(raw.profile?.fixedOutflows)},
+      cards,
+      counterparties,
+      months
     };
   }
   function ensureMonth(k=state.selectedMonthKey){
@@ -308,6 +476,10 @@
   function closeFab(){$('#fabMenu').classList.add('hidden');$('#fabBackdrop').classList.add('hidden');$('#fabBtn').classList.remove('open');}
   function boot(){
     ensureMonth();
+    if(state.__migration?.needsSave){
+      console.info('Migração de dados financeiros aplicada:', state.__migration);
+      save();
+    }
     document.addEventListener('click',(e)=>{
       const del=e.target.closest('[data-delcp]');
       if(del){e.preventDefault();e.stopPropagation(); deleteCounterparty(del.dataset.delcp); return;}
