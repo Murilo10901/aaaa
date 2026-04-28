@@ -86,16 +86,16 @@
   <div id="syncStatusBadge" class="sync-status-badge hidden">Salvo</div>
 
   <div id="protectionSetupModal" class="protection-modal hidden">
-    <div class="protection-modal-backdrop"></div><div class="protection-modal-card"><h2 class="protection-title">Crie sua senha de proteção</h2><p class="protection-subtitle">Essa senha protege seus dados financeiros. Ela é diferente da senha da sua conta.</p><div class="protection-form"><div><label for="setupProtectionPassword">Senha de proteção</label><input id="setupProtectionPassword" type="password" placeholder="Crie uma senha" /></div><div><label for="setupProtectionPasswordConfirm">Confirmar senha</label><input id="setupProtectionPasswordConfirm" type="password" placeholder="Repita a senha" /></div></div><div class="protection-note">Guarde bem essa senha. Se esquecer, você precisará da sua Recovery Key.</div><div id="setupProtectionError" class="protection-error hidden"></div><div class="protection-actions"><button id="confirmProtectionSetupBtn" type="button" class="btn primary">Ativar proteção</button></div></div>
+    <div class="protection-modal-backdrop"></div><div class="protection-modal-card"><h2 class="protection-title">Crie sua senha de proteção</h2><p class="protection-subtitle">Essa senha protege seus dados financeiros. Ela é diferente da senha da sua conta.</p><div class="protection-form"><div><label for="setupProtectionPassword">Senha de proteção</label><input id="setupProtectionPassword" type="password" autocomplete="new-password" placeholder="Crie uma senha" /></div><div><label for="setupProtectionPasswordConfirm">Confirmar senha</label><input id="setupProtectionPasswordConfirm" type="password" autocomplete="new-password" placeholder="Repita a senha" /></div></div><div class="protection-note">Guarde bem essa senha. Se esquecer, você precisará da sua Recovery Key.</div><div id="setupProtectionError" class="protection-error hidden"></div><div class="protection-actions"><button id="confirmProtectionSetupBtn" type="button" class="btn primary">Ativar proteção</button></div></div>
   </div>
   <div id="recoveryKeyModal" class="protection-modal hidden">
     <div class="protection-modal-backdrop"></div><div class="protection-modal-card"><h2 class="protection-title">Guarde sua Recovery Key</h2><p class="protection-subtitle">Se você esquecer sua senha de proteção, essa chave será a única forma de recuperar o acesso aos seus dados.</p><div class="recovery-key-box"><div class="recovery-key-label">Recovery Key</div><div id="recoveryKeyValue" class="recovery-key-value"></div></div><div class="protection-note">Tire print, copie e salve em local seguro.</div><div class="protection-actions"><button id="copyRecoveryKeyBtn" type="button" class="btn soft">Copiar chave</button><button id="confirmRecoveryKeySavedBtn" type="button" class="btn primary">Já salvei minha chave</button></div></div>
   </div>
   <div id="unlockProtectionModal" class="protection-modal hidden">
-    <div class="protection-modal-backdrop"></div><div class="protection-modal-card"><h2 class="protection-title">Desbloqueie seus dados</h2><p class="protection-subtitle">Digite sua senha de proteção para abrir seus dados financeiros.</p><div class="protection-form"><div><label for="unlockProtectionPassword">Senha de proteção</label><input id="unlockProtectionPassword" type="password" placeholder="Digite sua senha" /></div></div><div id="unlockProtectionError" class="protection-error hidden"></div><div class="protection-actions"><button id="openRecoveryModalBtn" type="button" class="btn soft">Esqueci minha senha</button><button id="confirmUnlockProtectionBtn" type="button" class="btn primary">Desbloquear</button></div></div>
+    <div class="protection-modal-backdrop"></div><div class="protection-modal-card"><h2 class="protection-title">Desbloqueie seus dados</h2><p class="protection-subtitle">Digite sua senha de proteção para abrir seus dados financeiros.</p><div class="protection-form"><div><label for="unlockProtectionPassword">Senha de proteção</label><input id="unlockProtectionPassword" type="password" autocomplete="current-password" placeholder="Digite sua senha" /></div></div><div id="unlockProtectionError" class="protection-error hidden"></div><div class="protection-actions"><button id="openRecoveryModalBtn" type="button" class="btn soft">Esqueci minha senha</button><button id="confirmUnlockProtectionBtn" type="button" class="btn primary">Desbloquear</button></div></div>
   </div>
   <div id="recoverProtectionModal" class="protection-modal hidden">
-    <div class="protection-modal-backdrop"></div><div class="protection-modal-card"><h2 class="protection-title">Recuperar senha de proteção</h2><p class="protection-subtitle">Use sua Recovery Key para definir uma nova senha.</p><div class="protection-form"><div><label for="recoveryKeyInput">Recovery Key</label><input id="recoveryKeyInput" type="text" placeholder="Cole sua Recovery Key" /></div><div><label for="newProtectionPassword">Nova senha</label><input id="newProtectionPassword" type="password" placeholder="Nova senha" /></div><div><label for="newProtectionPasswordConfirm">Confirmar nova senha</label><input id="newProtectionPasswordConfirm" type="password" placeholder="Repita a nova senha" /></div></div><div id="recoverProtectionError" class="protection-error hidden"></div><div class="protection-actions"><button id="cancelRecoverProtectionBtn" type="button" class="btn soft">Voltar</button><button id="confirmRecoverProtectionBtn" type="button" class="btn primary">Redefinir proteção</button></div></div>
+    <div class="protection-modal-backdrop"></div><div class="protection-modal-card"><h2 class="protection-title">Recuperar senha de proteção</h2><p class="protection-subtitle">Use sua Recovery Key para definir uma nova senha.</p><div class="protection-form"><div><label for="recoveryKeyInput">Recovery Key</label><input id="recoveryKeyInput" type="text" autocomplete="off" placeholder="Cole sua Recovery Key" /></div><div><label for="newProtectionPassword">Nova senha</label><input id="newProtectionPassword" type="password" autocomplete="new-password" placeholder="Nova senha" /></div><div><label for="newProtectionPasswordConfirm">Confirmar nova senha</label><input id="newProtectionPasswordConfirm" type="password" autocomplete="new-password" placeholder="Repita a nova senha" /></div></div><div id="recoverProtectionError" class="protection-error hidden"></div><div class="protection-actions"><button id="cancelRecoverProtectionBtn" type="button" class="btn soft">Voltar</button><button id="confirmRecoverProtectionBtn" type="button" class="btn primary">Redefinir proteção</button></div></div>
   </div>
 
 <script type="module">
@@ -410,6 +410,35 @@
     });
   }
 
+  const PROTECTION_CACHE_MINUTES = 20;
+  function protectionCacheKey(userId) {
+    return `aaa_finance_unlock_cache_${userId}`;
+  }
+  function saveProtectionCache(userId, password) {
+    if (!userId || !password) return;
+    sessionStorage.setItem(protectionCacheKey(userId), JSON.stringify({
+      password,
+      expiresAt: Date.now() + PROTECTION_CACHE_MINUTES * 60 * 1000
+    }));
+  }
+  function getProtectionCache(userId) {
+    try {
+      const raw = sessionStorage.getItem(protectionCacheKey(userId));
+      if (!raw) return '';
+      const data = JSON.parse(raw);
+      if (!data?.password || Date.now() > Number(data.expiresAt || 0)) {
+        sessionStorage.removeItem(protectionCacheKey(userId));
+        return '';
+      }
+      return data.password;
+    } catch {
+      return '';
+    }
+  }
+  function clearProtectionCache(userId) {
+    if (userId) sessionStorage.removeItem(protectionCacheKey(userId));
+  }
+
   function askUnlockProtectionModal() {
     return new Promise((resolve) => {
       unlockProtectionPassword.value = "";
@@ -524,10 +553,24 @@
     if (error) throw error;
 
     window.APP_UNLOCK_PASSWORD = protectionPassword;
+    saveProtectionCache(userId, protectionPassword);
     await showRecoveryKeyModal(recoveryKey);
   }
 
   async function unlockProtectedState(financeRow, userId) {
+    const cachedPassword = getProtectionCache(userId);
+    if (cachedPassword) {
+      try {
+        const dataKey = await unwrapDataKeyWithSecret(financeRow.encrypted_data_key, cachedPassword);
+        const initialState = await decryptWithDataKey(financeRow.app_state_crypto, dataKey);
+        window.APP_UNLOCK_PASSWORD = cachedPassword;
+        saveProtectionCache(userId, cachedPassword);
+        return initialState;
+      } catch (err) {
+        console.warn('Cache de proteção expirado ou inválido.', err);
+        clearProtectionCache(userId);
+      }
+    }
     while (true) {
       const action = await askUnlockProtectionModal();
 
@@ -536,6 +579,7 @@
           const dataKey = await unwrapDataKeyWithSecret(financeRow.encrypted_data_key, action.password);
           const initialState = await decryptWithDataKey(financeRow.app_state_crypto, dataKey);
           window.APP_UNLOCK_PASSWORD = action.password;
+          saveProtectionCache(userId, action.password);
           return initialState;
         } catch (err) {
           console.error(err);
@@ -565,6 +609,7 @@
 
           const initialState = await decryptWithDataKey(financeRow.app_state_crypto, dataKey);
           window.APP_UNLOCK_PASSWORD = recoveryResult.newPassword;
+          saveProtectionCache(userId, recoveryResult.newPassword);
           alert("Senha de proteção redefinida com sucesso.");
           return initialState;
         } catch (err) {
@@ -656,6 +701,153 @@
         return;
       }
 
+      const localCacheKey = `assistente_financeiro_user_${user.id}`;
+      const FINANCE_CACHE_TTL_MINUTES = 5;
+      let cachedEncryptedDataKey = null;
+      let cachedFinanceRow = null;
+      let appStarted = false;
+      let lastRemoteSaveAt = 0;
+
+      function readLocalStateCache() {
+        try {
+          const raw = localStorage.getItem(localCacheKey);
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function markFinanceCacheSync() {
+        try { localStorage.setItem(`${localCacheKey}__last_remote_sync`, String(Date.now())); } catch {}
+      }
+
+      function shouldRefreshRemoteCache() {
+        try {
+          const last = Number(localStorage.getItem(`${localCacheKey}__last_remote_sync`) || 0);
+          return !last || (Date.now() - last) > FINANCE_CACHE_TTL_MINUTES * 60 * 1000;
+        } catch { return true; }
+      }
+
+      async function getRemoteFinanceRow(select = '*') {
+        const { data: row, error } = await supabase
+          .from('user_finance_data')
+          .select(select)
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (error) throw error;
+        return row;
+      }
+
+      async function saveRemoteState(nextState) {
+        const protectionPassword = window.APP_UNLOCK_PASSWORD;
+        if (protectionPassword) saveProtectionCache(user.id, protectionPassword);
+        if (!protectionPassword) throw new Error('Senha de proteção não disponível em memória.');
+
+        if (!cachedEncryptedDataKey) {
+          const latestRow = await getRemoteFinanceRow('encrypted_data_key');
+          if (!latestRow?.encrypted_data_key) throw new Error('Chave de criptografia remota não encontrada.');
+          cachedEncryptedDataKey = latestRow.encrypted_data_key;
+        }
+
+        const dataKey = await unwrapDataKeyWithSecret(cachedEncryptedDataKey, protectionPassword);
+        const stateToSave = {
+          ...nextState,
+          __updatedAt: nextState?.__updatedAt || Date.now(),
+          __lastSavedAt: Date.now()
+        };
+        const appStateCrypto = await encryptWithDataKey(stateToSave, dataKey);
+
+        const { error } = await supabase
+          .from('user_finance_data')
+          .update({
+            app_state_crypto: appStateCrypto,
+            app_state_version: 2,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', user.id);
+        if (error) throw error;
+
+        lastRemoteSaveAt = Date.now();
+        markFinanceCacheSync();
+        if (Date.now() - lastRemoteSaveAt < 1500) return;
+      }
+
+      function launchMainApp(initialState) {
+        if (appStarted) return;
+        appStarted = true;
+        window.APP_BOOTSTRAP = {
+          supabase,
+          session,
+          user,
+          profile,
+          initialState,
+          cacheKey: localCacheKey,
+          setLoading,
+          saveState: saveRemoteState,
+          async updateProfile(patch) {
+            const payload = { last_seen_at: new Date().toISOString() };
+            if (typeof patch.display_name !== 'undefined') payload.display_name = patch.display_name;
+            if (typeof patch.avatar_url !== 'undefined') payload.avatar_url = patch.avatar_url;
+            const { error } = await supabase.from('app_profiles').update(payload).eq('user_id', user.id);
+            if (error) throw error;
+          },
+          async logout() {
+            clearProtectionCache(user.id);
+            window.APP_UNLOCK_PASSWORD = null;
+            await supabase.auth.signOut();
+          }
+        };
+        const script = document.createElement('script');
+        script.src = 'script.js';
+        script.onload = () => setLoading(false);
+        script.onerror = () => { setLoading(false); alert('Erro ao carregar o script principal.'); };
+        document.body.appendChild(script);
+      }
+
+      async function syncRemoteInBackground(localState) {
+        try {
+          const cachedPassword = getProtectionCache(user.id);
+          const financeRow = await getRemoteFinanceRow('*');
+          cachedFinanceRow = financeRow;
+          if (!financeRow) return;
+          if (financeRow.encrypted_data_key) cachedEncryptedDataKey = financeRow.encrypted_data_key;
+          markFinanceCacheSync();
+
+          let remoteState = null;
+          if (financeRow?.app_state_crypto && financeRow?.encrypted_data_key && financeRow?.recovery_key_wrap && cachedPassword) {
+            const dataKey = await unwrapDataKeyWithSecret(financeRow.encrypted_data_key, cachedPassword);
+            remoteState = await decryptWithDataKey(financeRow.app_state_crypto, dataKey);
+          } else if (financeRow?.app_state) {
+            remoteState = financeRow.app_state;
+          }
+
+          if (!remoteState) return;
+          const remoteUpdated = Number(remoteState.__updatedAt || remoteState.__lastSavedAt || 0);
+          const localUpdated = Number(localState?.__updatedAt || localState?.__lastSavedAt || 0);
+          if (remoteUpdated > localUpdated + 1000 && window.__AAA_FINANCE_APPLY_REMOTE_STATE) {
+            window.__AAA_FINANCE_APPLY_REMOTE_STATE(remoteState);
+          }
+        } catch (err) {
+          console.warn('Sincronização remota em segundo plano falhou:', err);
+        }
+      }
+
+      const cachedState = readLocalStateCache();
+      const cachedPassword = getProtectionCache(user.id);
+      if (cachedState && cachedPassword) {
+        window.APP_UNLOCK_PASSWORD = cachedPassword;
+        setLoading(true, 'Abrindo dados salvos neste dispositivo...');
+        launchMainApp(cachedState);
+        if (shouldRefreshRemoteCache()) {
+          syncRemoteInBackground(cachedState);
+        } else {
+          setTimeout(() => syncRemoteInBackground(cachedState), 1200);
+        }
+        return;
+      }
+
       setLoading(true, "Carregando dados financeiros...");
 
       let { data: financeRow, error: financeError } = await supabase
@@ -717,87 +909,10 @@
         setLoading(true, "Abrindo a aplicação...");
       }
 
-      window.APP_BOOTSTRAP = {
-        supabase,
-        session,
-        user,
-        profile,
-        initialState,
-        cacheKey: `assistente_financeiro_user_${user.id}`,
-        setLoading,
-
-        async saveState(nextState) {
-          const protectionPassword = window.APP_UNLOCK_PASSWORD;
-          if (!protectionPassword) {
-            throw new Error("Senha de proteção não disponível em memória.");
-          }
-
-          const { data: latestRow, error: latestRowError } = await supabase
-            .from("user_finance_data")
-            .select("encrypted_data_key")
-            .eq("user_id", user.id)
-            .single();
-
-          if (latestRowError) throw latestRowError;
-
-          const dataKey = await unwrapDataKeyWithSecret(latestRow.encrypted_data_key, protectionPassword);
-          const appStateCrypto = await encryptWithDataKey(nextState, dataKey);
-
-          const { error } = await supabase
-            .from('user_finance_data')
-            .update({
-              app_state_crypto: appStateCrypto,
-              app_state_version: 2
-            })
-            .eq('user_id', user.id);
-
-          if (error) {
-            console.error('Erro ao salvar estado remoto:', error);
-            throw error;
-          }
-
-          await supabase
-            .from('app_profiles')
-            .update({
-              last_seen_at: new Date().toISOString()
-            })
-            .eq('user_id', user.id);
-        },
-
-        async updateProfile(patch) {
-          const payload = {
-            last_seen_at: new Date().toISOString()
-          };
-
-          if (typeof patch.display_name !== 'undefined') payload.display_name = patch.display_name;
-          if (typeof patch.avatar_url !== 'undefined') payload.avatar_url = patch.avatar_url;
-
-          const { error } = await supabase
-            .from('app_profiles')
-            .update(payload)
-            .eq('user_id', user.id);
-
-          if (error) {
-            console.error('Erro ao atualizar profile remoto:', error);
-            throw error;
-          }
-        },
-
-        async logout() {
-          window.APP_UNLOCK_PASSWORD = null;
-          await supabase.auth.signOut();
-        }
-      };
-
+      if (financeRow?.encrypted_data_key) cachedEncryptedDataKey = financeRow.encrypted_data_key;
       setLoading(true, "Abrindo a aplicação...");
-      const script = document.createElement('script');
-      script.src = 'script.js';
-      script.onload = () => setLoading(false);
-      script.onerror = () => {
-        setLoading(false);
-        alert("Erro ao carregar o script principal.");
-      };
-      document.body.appendChild(script);
+      launchMainApp(initialState);
+      markFinanceCacheSync();
 
     } catch (err) {
       console.error(err);
