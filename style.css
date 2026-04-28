@@ -17,3 +17,16 @@ body.theme-light{--accordion-active:#111827;--accordion-active-bg:rgba(17,24,39,
 .fake-card.clickable{border:0;color:#fff;text-align:left;cursor:pointer}.fake-card.clickable:hover{transform:translateY(-2px);filter:brightness(1.05)}
 .card-account-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}.account-card{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:22px;padding:16px;text-align:left;display:grid;gap:8px;cursor:pointer;box-shadow:0 8px 22px rgba(0,0,0,.08);transition:.2s ease}.theme-light .account-card{background:#fff}.account-card:hover{transform:translateY(-1px);border-color:rgba(124,58,237,.5)}.account-card span{width:38px;height:38px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff}.account-card strong{font-size:15px}.account-card small{color:var(--muted);line-height:1.35}.account-card.active{border-color:#7c3aed;background:rgba(124,58,237,.14)}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;flex-wrap:wrap}
+
+/* Máscara de valores em reais */
+.money-input{
+  font-variant-numeric: tabular-nums;
+  letter-spacing:.01em;
+}
+.money-input::placeholder{
+  color:var(--muted);
+  opacity:.8;
+}
+
+/* ===== Extras: busca, filtros, recorrentes, duplicar e fechamento ===== */
+.transaction-toolbar{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:14px}.search-field input{padding-left:16px}.actions-row{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.month-closed-badge{margin-top:14px;border:1px solid rgba(139,92,246,.35);background:rgba(139,92,246,.14);color:var(--text);border-radius:16px;padding:12px 14px;font-weight:900}.btn[disabled]{opacity:.55;cursor:not-allowed;filter:grayscale(.4)}.panel-subtitle{line-height:1.55;margin-bottom:12px}.tx-detail-actions{justify-content:center}.tx-detail-actions .btn{min-width:110px}.transaction-list .tx-row[data-tx-id] .tx-main small{line-height:1.35}@media(min-width:720px){.transaction-toolbar{grid-template-columns:1fr 240px}.actions-row{flex-wrap:nowrap}}@media(max-width:560px){.actions-row{justify-content:stretch}.actions-row .btn{flex:1}.tx-detail-actions .btn{width:100%}}

@@ -8,11 +8,13 @@
   const today=()=>new Date().toISOString().slice(0,10);
   const monthKey=()=>new Date().toISOString().slice(0,7);
   const MAIN_ACCOUNT_ID = 'main-account';
-  const DATA_SCHEMA_VERSION = 4;
+  const DATA_SCHEMA_VERSION = 5;
   const state = normalize(loadInitial());
   let saveTimer=null;
   let activeScreen=state.activeScreen||'home';
   let openSummaryAccordion = null;
+  let txSearch = '';
+  let txStatusFilter = 'all';
 
   function loadInitial(){
     try { return BOOT.initialState || JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}'); } catch { return {}; }
@@ -169,7 +171,8 @@
         cardPurchases:asArray(mm.cardPurchases || mm.card_purchases || mm.comprasCartao || mm.compras_cartao).map(x=>normalizeCardPurchase(x,k)),
         manualInvoices:asObject(mm.manualInvoices || mm.faturasManuais || {}),
         saveGoal:asNumber(mm.saveGoal || mm.metaGuardar || 0),
-        savedThisMonth:asNumber(mm.savedThisMonth || mm.guardadoMes || 0)
+        savedThisMonth:asNumber(mm.savedThisMonth || mm.guardadoMes || 0),
+        closed:!!(mm.closed || mm.isClosed || mm.fechado)
       };
     });
 
@@ -193,20 +196,92 @@
       profile:{name:raw.profile?.name||raw.profile?.display_name||'Matheus', email:raw.profile?.email||BOOT.user?.email||'', photo:raw.profile?.photo||'', fixedSalary:asNumber(raw.profile?.fixedSalary||0), defaultSaveGoal:asNumber(raw.profile?.defaultSaveGoal||0), savingsPotBase:asNumber(raw.profile?.savingsPotBase||0), fixedIncomes:asArray(raw.profile?.fixedIncomes), fixedOutflows:asArray(raw.profile?.fixedOutflows)},
       cards,
       counterparties,
+      recurringRules: asArray(raw.recurringRules || raw.recorrentes || raw.lancamentosRecorrentes).map(r=>({
+        id: normalizeText(r.id || r.ruleId || r.uuid, uid()),
+        type: ['income','in','receita','entrada'].includes(String(r.type||r.tipo||'').toLowerCase()) ? 'income' : 'expense',
+        description: normalizeText(r.description || r.descricao || r.title || r.nome, 'Lançamento recorrente'),
+        amount: asNumber(r.amount ?? r.valor ?? r.value ?? 0),
+        category: normalizeText(r.category || r.categoria || 'Outros','Outros'),
+        accountId: normalizeText(r.accountId || r.contaId || r.cardId || '', ''),
+        counterpartyId: normalizeText(r.counterpartyId || r.devedorId || '', ''),
+        status: r.status || '',
+        note: normalizeText(r.note || r.observacao || r.obs || '', ''),
+        day: Math.min(28, Math.max(1, asNumber(r.day || r.dia || 1) || 1)),
+        active: r.active !== false
+      })),
       months
     };
   }
   function ensureMonth(k=state.selectedMonthKey){
-    if(!state.months[k]) state.months[k]={openingBalance:0,incomes:[],outflows:[],cardPurchases:[],manualInvoices:{},saveGoal:0,savedThisMonth:0};
+    if(!state.months[k]) state.months[k]={openingBalance:0,incomes:[],outflows:[],cardPurchases:[],manualInvoices:{},saveGoal:0,savedThisMonth:0,closed:false};
     const m=state.months[k];
     m.incomes=Array.isArray(m.incomes)?m.incomes:[];
     m.outflows=Array.isArray(m.outflows)?m.outflows:[];
     m.cardPurchases=Array.isArray(m.cardPurchases)?m.cardPurchases:[];
     m.manualInvoices=m.manualInvoices||{};
+    m.closed=!!m.closed;
     return m;
+  }
+  function isMonthClosed(k=state.selectedMonthKey){ return !!ensureMonth(k).closed; }
+  function assertMonthOpen(k=state.selectedMonthKey){
+    if(isMonthClosed(k)){ alert('Este mês está fechado/conferido. Reabra o mês para editar, excluir ou cadastrar lançamentos.'); return false; }
+    return true;
+  }
+  function setMonthClosed(k=state.selectedMonthKey,closed=true){ ensureMonth(k).closed=!!closed; save(); render(); }
+  function rowStatusGroup(row){
+    const s=String(row.status||'').toLowerCase();
+    if(['pending'].includes(s)) return 'pending';
+    if(['not_paid','not_received'].includes(s)) return 'open';
+    if(['paid','received'].includes(s)) return 'settled';
+    return s || 'settled';
+  }
+  function rowMatchesFilters(row){
+    const q=txSearch.trim().toLowerCase();
+    if(q){
+      const hay=[row.title,row.description,row.category,row.method,row.note,counterpartyName(row.counterpartyId),row.status,row.installment].filter(Boolean).join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    if(txStatusFilter==='all') return true;
+    const s=String(row.status||'').toLowerCase();
+    if(txStatusFilter==='pending') return s==='pending';
+    if(txStatusFilter==='settled') return ['paid','received'].includes(s);
+    if(txStatusFilter==='open') return ['pending','not_paid','not_received'].includes(s);
+    return s===txStatusFilter;
   }
   function money(v){return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});}
   function parseMoney(v){return Number(String(v||'').replace(/\s/g,'').replace(/R\$/gi,'').replace(/\./g,'').replace(',','.'))||0;}
+  function onlyDigits(v){return String(v||'').replace(/\D/g,'');}
+  function formatMoneyTyping(value){
+    const digits = onlyDigits(value);
+    if(!digits) return '';
+    return (Number(digits) / 100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  }
+  function bindMoneyInputs(root=document){
+    $$('input[data-money="brl"]', root).forEach(input=>{
+      if(input.dataset.moneyBound==='1') return;
+      input.dataset.moneyBound='1';
+      input.classList.add('money-input');
+      input.setAttribute('inputmode','numeric');
+      input.setAttribute('autocomplete','off');
+      if(input.value) input.value = formatMoneyTyping(input.value) || input.value;
+      input.addEventListener('input',()=>{
+        input.value = formatMoneyTyping(input.value);
+        input.setSelectionRange(input.value.length,input.value.length);
+      });
+      input.addEventListener('focus',()=>{
+        if(input.value) {
+          input.value = formatMoneyTyping(input.value) || input.value;
+          setTimeout(()=>input.setSelectionRange(input.value.length,input.value.length),0);
+        }
+      });
+      input.addEventListener('blur',()=>{
+        input.value = formatMoneyTyping(input.value);
+      });
+      input.addEventListener('paste',()=>{
+        setTimeout(()=>{ input.value = formatMoneyTyping(input.value); },0);
+      });
+    });
+  }
   function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
   function counterpartyName(id){return state.counterparties.find(c=>c.id===id)?.name||'';}
   function counterpartyOptions(selected=''){
@@ -289,6 +364,7 @@
     if(activeScreen==='planning') renderPlanning();
     if(activeScreen==='more') renderMore();
     if(activeScreen==='cards') renderCardsManager();
+    if(activeScreen==='pending') renderPendingScreen();
     bindDynamicHandlers();
   }
   function title(h,p=''){ $('#screenTitle').innerHTML=`<h1>${h}</h1>${p?`<p>${p}</p>`:''}`; }
@@ -311,7 +387,7 @@
     return rows.sort((a,b)=>String(b.date||b.purchaseDate||'').localeCompare(String(a.date||a.purchaseDate||'')));
   }
   function txListHtml(limit=999){
-    let rows=combinedRows(); if(limit) rows=rows.slice(0,limit);
+    let rows=combinedRows().filter(rowMatchesFilters); if(limit) rows=rows.slice(0,limit);
     if(!rows.length)return '<div class="empty">Nenhum lançamento nesse mês. Clique no + para cadastrar.</div>';
     let html='', last='';
     rows.forEach(r=>{
@@ -325,10 +401,17 @@
     }); return html;
   }
   function renderTransactions(){
+    applyRecurringToMonth(state.selectedMonthKey,false);
     const t=totals();
-    title('Transações','Lista por dia, com controle mensal igual app.');
-    $('#appContent').innerHTML=`${accountSelectorHtml()}<section class="panel"><div class="balance-subgrid"><div class="mini-kpi"><span>Saldo fim do mês</span><strong style="color:var(--green)">${money(t.balance)}</strong></div><div class="mini-kpi"><span>Balanço mensal</span><strong>${money(t.income-t.expenses)}</strong></div></div></section><section class="panel"><div class="panel-head"><div><h2>${monthLabel(state.selectedMonthKey)}</h2><p class="muted">Receitas, despesas e cartões</p></div><button class="btn primary" id="addTxTop">Adicionar</button></div><div class="transaction-list">${txListHtml()}</div></section>`;
-    $('#addTxTop').onclick=toggleFab;
+    const closed=isMonthClosed();
+    title('Transações','Lista por dia, busca, status, edição, duplicação e fechamento do mês.');
+    $('#appContent').innerHTML=`${accountSelectorHtml()}<section class="panel"><div class="balance-subgrid"><div class="mini-kpi"><span>Saldo fim do mês</span><strong style="color:var(--green)">${money(t.balance)}</strong></div><div class="mini-kpi"><span>Balanço mensal</span><strong>${money(t.income-t.expenses)}</strong></div></div>${closed?'<div class="month-closed-badge">🔒 Mês fechado/conferido</div>':''}</section><section class="panel"><div class="transaction-toolbar"><div class="field search-field"><label>Buscar transação</label><input id="txSearchInput" value="${esc(txSearch)}" placeholder="mercado, pix, cartão, João..." /></div><div class="field"><label>Status</label><select id="txStatusFilter"><option value="all">Todos</option><option value="open">Em aberto</option><option value="pending">Pendente</option><option value="settled">Pago/recebido</option><option value="paid">Pago</option><option value="received">Recebido</option><option value="not_paid">Não pago</option><option value="not_received">Não recebido</option></select></div></div><div class="panel-head"><div><h2>${monthLabel(state.selectedMonthKey)}</h2><p class="muted">Receitas, despesas, cartões e recorrentes</p></div><div class="actions-row"><button class="btn soft" id="toggleCloseMonthBtn">${closed?'Reabrir mês':'Fechar mês'}</button><button class="btn soft" id="recurringTopBtn">Recorrentes</button><button class="btn primary" id="addTxTop" ${closed?'disabled':''}>Adicionar</button></div></div><div class="transaction-list">${txListHtml()}</div></section>`;
+    const status=$('#txStatusFilter'); if(status) status.value=txStatusFilter;
+    $('#addTxTop').onclick=()=> closed ? alert('Mês fechado. Reabra para adicionar lançamentos.') : toggleFab();
+    $('#recurringTopBtn').onclick=renderRecurringManager;
+    $('#toggleCloseMonthBtn').onclick=()=>setMonthClosed(state.selectedMonthKey,!closed);
+    $('#txSearchInput').oninput=e=>{txSearch=e.target.value||''; renderTransactions();};
+    $('#txStatusFilter').onchange=e=>{txStatusFilter=e.target.value||'all'; renderTransactions();};
   }
   function renderPlanning(){
     const t=totals(); title('Planejamento e resumos','Gráficos e leituras por categoria, cartões e período.');
@@ -391,8 +474,8 @@
   }
   function renderMore(){
     title('Mais','Configurações, devedores, cartões e dados.');
-    $('#appContent').innerHTML=`<section class="panel"><h2>Configurações</h2><div class="list-menu"><button class="list-btn" id="themeBtn"><span><strong>Modo ${state.theme==='dark'?'claro':'escuro'}</strong><small>Alterar visual do app</small></span><b>☼</b></button><button class="list-btn" id="profileBtn"><span><strong>Perfil</strong><small>Nome e saldo inicial</small></span><b>›</b></button><button class="list-btn" id="cardBtn"><span><strong>Cartões</strong><small>Criar ou editar cartões</small></span><b>›</b></button><button class="list-btn" id="counterBtn"><span><strong>Devedores / empresas</strong><small>A receber e a pagar</small></span><b>›</b></button><button class="list-btn" id="exportBtn"><span><strong>Exportar resumo</strong><small>Copiar texto do mês</small></span><b>⧉</b></button><button class="list-btn" id="logoutBtn"><span><strong>Sair da conta</strong><small>Encerrar sessão</small></span><b>↪</b></button></div></section><section class="panel"><h2>Contas/cartões cadastrados</h2>${cardListHtml()}</section><section class="panel"><h2>Devedores cadastrados</h2><p class="muted">${esc(selectedCardLabel())}</p><div id="debtList">${counterpartyHtml()}</div></section>`;
-    $('#themeBtn').onclick=toggleTheme; $('#profileBtn').onclick=openProfile; $('#cardBtn').onclick=()=>{activeScreen='cards'; renderCardsManager(); save();}; $('#counterBtn').onclick=()=>openAction('counterparty'); $('#exportBtn').onclick=copySummary; $('#logoutBtn').onclick=logout;
+    $('#appContent').innerHTML=`<section class="panel"><h2>Configurações</h2><div class="list-menu"><button class="list-btn" id="themeBtn"><span><strong>Modo ${state.theme==='dark'?'claro':'escuro'}</strong><small>Alterar visual do app</small></span><b>☼</b></button><button class="list-btn" id="profileBtn"><span><strong>Perfil</strong><small>Nome e saldo inicial</small></span><b>›</b></button><button class="list-btn" id="cardBtn"><span><strong>Cartões</strong><small>Criar ou editar cartões</small></span><b>›</b></button><button class="list-btn" id="counterBtn"><span><strong>Devedores / empresas</strong><small>A receber e a pagar</small></span><b>›</b></button><button class="list-btn" id="pendingBtn"><span><strong>Pendências</strong><small>A receber, a pagar, vencidas e por pessoa</small></span><b>›</b></button><button class="list-btn" id="recurringBtn"><span><strong>Lançamentos recorrentes</strong><small>Aluguel, internet, salário, academia...</small></span><b>›</b></button><button class="list-btn" id="exportBtn"><span><strong>Exportar resumo</strong><small>Copiar texto do mês</small></span><b>⧉</b></button><button class="list-btn" id="logoutBtn"><span><strong>Sair da conta</strong><small>Encerrar sessão</small></span><b>↪</b></button></div></section><section class="panel"><h2>Contas/cartões cadastrados</h2>${cardListHtml()}</section><section class="panel"><h2>Devedores cadastrados</h2><p class="muted">${esc(selectedCardLabel())}</p><div id="debtList">${counterpartyHtml()}</div></section>`;
+    $('#themeBtn').onclick=toggleTheme; $('#profileBtn').onclick=openProfile; $('#cardBtn').onclick=()=>{activeScreen='cards'; renderCardsManager(); save();}; $('#counterBtn').onclick=()=>openAction('counterparty'); $('#pendingBtn').onclick=()=>{activeScreen='pending'; renderPendingScreen(); save();}; $('#recurringBtn').onclick=renderRecurringManager; $('#exportBtn').onclick=copySummary; $('#logoutBtn').onclick=logout;
     bindDynamicHandlers($('#appContent'));
   }
   function drawPie(id,a,b){
@@ -407,22 +490,95 @@
     keys.forEach((k,i)=>{const bw=(c.clientWidth-40)/keys.length-10,x=20+i*((c.clientWidth-40)/keys.length),bh=(vals[i]/max)*(c.clientHeight-54);ctx.fillStyle='#7c3aed';ctx.beginPath();ctx.roundRect?ctx.roundRect(x,c.clientHeight-32-bh,bw,bh,8):ctx.rect(x,c.clientHeight-32-bh,bw,bh);ctx.fill();ctx.fillStyle=getComputedStyle(document.body).getPropertyValue('--muted');ctx.font='11px Inter';ctx.textAlign='center';ctx.fillText(monthLabel(k).split(' ')[0],x+bw/2,c.clientHeight-10);});
   }
   function openModal(titleText,body,eyebrow='Cadastro'){
-    $('#modalTitle').textContent=titleText; $('#modalEyebrow').textContent=eyebrow; $('#modalBody').innerHTML=body; $('#modalRoot').classList.remove('hidden'); $('#closeModalBtn').onclick=closeModal; $('#modalRoot .modal-backdrop').onclick=closeModal;
+    $('#modalTitle').textContent=titleText; $('#modalEyebrow').textContent=eyebrow; $('#modalBody').innerHTML=body; $('#modalRoot').classList.remove('hidden'); $('#closeModalBtn').onclick=closeModal; $('#modalRoot .modal-backdrop').onclick=closeModal; bindMoneyInputs($('#modalBody'));
   }
   function closeModal(){ $('#modalRoot').classList.add('hidden'); $('#modalBody').innerHTML='';}
-  function openAction(type){closeFab(); if(type==='income'||type==='expense') openTxForm(type); if(type==='card') openCardForm(); if(type==='counterparty') openCounterpartyForm();}
-  function openTxForm(type){
+  function openAction(type){closeFab(); if(type==='income'||type==='expense') openTxForm(type); if(type==='card') openCardForm(); if(type==='counterparty') openCounterpartyForm(); if(type==='recurring') openRecurringForm();}
+  function categoryOptions(selected=''){
+    const cats=['Alimentação','Salário','Transporte','Lazer','Moradia','Serviços','Investimento','Cartão','Outros'];
+    return cats.map(c=>`<option ${selected===c?'selected':''}>${c}</option>`).join('');
+  }
+  function statusOptions(kind,selected=''){
+    const opts = kind==='income'
+      ? [['received','Recebido'],['pending','Pendente'],['not_received','Não recebido']]
+      : [['paid','Pago'],['pending','Pendente'],['not_paid','Não pago']];
+    return opts.map(([v,l])=>`<option value="${v}" ${selected===v?'selected':''}>${l}</option>`).join('');
+  }
+  function openTxForm(type, editData=null){
     const isIn=type==='income';
-    openModal(isIn?'Adicionar receita':'Adicionar despesa',`<div class="form-grid"><div class="field"><label>Data</label><input id="fDate" type="date" value="${today()}"></div><div class="field"><label>Descrição</label><input id="fDesc" placeholder="Ex.: Mercado, salário, pix..."></div><div class="field"><label>Valor</label><input id="fAmount" placeholder="R$ 0,00"></div><div class="field"><label>Categoria</label><select id="fCat"><option>Alimentação</option><option>Salário</option><option>Transporte</option><option>Lazer</option><option>Moradia</option><option>Serviços</option><option>Investimento</option><option>Outros</option></select></div><div class="field"><label>Conta/cartão</label><select id="fAccount">${cardOptions(state.selectedCardId,false)}</select></div><div class="field"><label>Vincular a devedor / empresa</label><select id="fCounterparty">${counterpartyOptions()}</select></div><div class="field"><label>Status</label><select id="fStatus">${isIn?'<option value="received">Recebido</option><option value="pending">Pendente</option><option value="not_received">Não recebido</option>':'<option value="paid">Pago</option><option value="pending">Pendente</option><option value="not_paid">Não pago</option>'}</select></div><div class="field"><label>Observação / origem</label><textarea id="fNote" rows="3" placeholder="Ex.: combinado pelo WhatsApp, parcela 1, pagamento de cliente..."></textarea></div><button id="saveTx" class="btn primary">Salvar</button></div>`);
-    $('#saveTx').onclick=()=>{const k=$('#fDate').value.slice(0,7)||state.selectedMonthKey; ensureMonth(k); const item={id:uid(),date:$('#fDate').value||today(),description:$('#fDesc').value|| (isIn?'Receita':'Despesa'),amount:parseMoney($('#fAmount').value),category:$('#fCat').value,status:$('#fStatus').value||(isIn?'received':'paid'),method:'Carteira',accountId:$('#fAccount').value||state.selectedCardId||'',counterpartyId:$('#fCounterparty').value||'',note:$('#fNote').value.trim()}; if(item.amount<=0)return alert('Digite um valor maior que zero.'); (isIn?state.months[k].incomes:state.months[k].outflows).push(item); state.selectedMonthKey=k; closeModal(); save(); render();};
+    const isEdit=!!editData;
+    const tx=editData?.item||{};
+    const currentMonth=editData?.month||state.selectedMonthKey;
+    const titleText=isEdit?(isIn?'Editar receita':'Editar despesa'):(isIn?'Adicionar receita':'Adicionar despesa');
+    openModal(titleText,`<div class="form-grid"><div class="field"><label>Data</label><input id="fDate" type="date" value="${esc(tx.date||today())}"></div><div class="field"><label>Descrição</label><input id="fDesc" value="${esc(tx.description||'')}" placeholder="Ex.: Mercado, salário, pix..."></div><div class="field"><label>Valor</label><input id="fAmount" value="${tx.amount?money(tx.amount):''}" placeholder="R$ 0,00" inputmode="numeric" data-money="brl"></div><div class="field"><label>Categoria</label><select id="fCat">${categoryOptions(tx.category||'')}</select></div><div class="field"><label>Conta/cartão</label><select id="fAccount">${cardOptions(tx.accountId||state.selectedCardId,false)}</select></div><div class="field"><label>Vincular a devedor / empresa</label><select id="fCounterparty">${counterpartyOptions(tx.counterpartyId||'')}</select></div><div class="field"><label>Status</label><select id="fStatus">${statusOptions(isIn?'income':'expense',tx.status||(isIn?'received':'paid'))}</select></div><div class="field"><label>Observação / origem</label><textarea id="fNote" rows="3" placeholder="Ex.: combinado pelo WhatsApp, parcela 1, pagamento de cliente...">${esc(tx.note||'')}</textarea></div><div class="modal-actions"><button id="saveTx" class="btn primary">${isEdit?'Salvar alterações':'Salvar'}</button>${isEdit?`<button id="deleteTxFromEdit" class="btn danger" type="button">Excluir</button>`:''}</div></div>`);
+    $('#saveTx').onclick=()=>{
+      const k=$('#fDate').value.slice(0,7)||state.selectedMonthKey;
+      if(!assertMonthOpen(k)) return;
+      ensureMonth(k);
+      const item={...(isEdit?tx:{}),id:isEdit?tx.id:uid(),date:$('#fDate').value||today(),description:$('#fDesc').value|| (isIn?'Receita':'Despesa'),amount:parseMoney($('#fAmount').value),category:$('#fCat').value,status:$('#fStatus').value||(isIn?'received':'paid'),method:'Carteira',accountId:$('#fAccount').value||state.selectedCardId||'',counterpartyId:$('#fCounterparty').value||'',note:$('#fNote').value.trim()};
+      if(item.amount<=0)return alert('Digite um valor maior que zero.');
+      const listName=isIn?'incomes':'outflows';
+      if(isEdit){
+        if(!assertMonthOpen(currentMonth)) return;
+        const oldM=ensureMonth(currentMonth);
+        oldM[listName]=(oldM[listName]||[]).filter(x=>x.id!==tx.id);
+      }
+      state.months[k][listName].push(item);
+      state.selectedMonthKey=k;
+      closeModal(); save(); render();
+    };
+    const delBtn=$('#deleteTxFromEdit');
+    if(delBtn) delBtn.onclick=()=>deleteTransaction(isIn?'income':'outflow',tx.id,currentMonth,true);
   }
   function openCardForm(){
-    openModal('Conta / cartão',`<div class="form-grid two"><div class="field"><label>Banco / nome da conta</label><input id="cardBank" placeholder="Nubank, Bradesco, Carteira..."></div><div class="field"><label>Apelido</label><input id="cardName" placeholder="Principal"></div><div class="field"><label>Saldo inicial dessa conta</label><input id="cardOpening" placeholder="R$ 0,00"></div><div class="field"><label>Vence dia</label><input id="cardDue" type="number" value="10"></div><div class="field"><label>Compra do mês nessa conta/cartão</label><input id="cardPurchase" placeholder="R$ 0,00"></div><div class="field"><label>Descrição da compra</label><input id="cardDesc" placeholder="Compra no cartão"></div><div class="field"><label>Parcelas</label><input id="cardParc" type="number" value="1"></div><button id="saveCard" class="btn primary">Salvar conta/cartão</button></div>`);
+    openModal('Conta / cartão',`<div class="form-grid two"><div class="field"><label>Banco / nome da conta</label><input id="cardBank" placeholder="Nubank, Bradesco, Carteira..."></div><div class="field"><label>Apelido</label><input id="cardName" placeholder="Principal"></div><div class="field"><label>Saldo inicial dessa conta</label><input id="cardOpening" placeholder="R$ 0,00" inputmode="numeric" data-money="brl"></div><div class="field"><label>Vence dia</label><input id="cardDue" type="number" value="10"></div><div class="field"><label>Compra do mês nessa conta/cartão</label><input id="cardPurchase" placeholder="R$ 0,00" inputmode="numeric" data-money="brl"></div><div class="field"><label>Descrição da compra</label><input id="cardDesc" placeholder="Compra no cartão"></div><div class="field"><label>Parcelas</label><input id="cardParc" type="number" value="1"></div><button id="saveCard" class="btn primary">Salvar conta/cartão</button></div>`);
     $('#saveCard').onclick=()=>{let card=state.cards.find(c=>(c.bank||'').toLowerCase()===$('#cardBank').value.toLowerCase()&&(c.name||'').toLowerCase()===$('#cardName').value.toLowerCase()); if(!card){card={id:uid(),bank:$('#cardBank').value||'Conta',name:$('#cardName').value||'Principal',dueDay:Number($('#cardDue').value||10),closingDay:25,openingBalance:parseMoney($('#cardOpening').value),color:'#7c3aed'}; state.cards.push(card);} else {card.openingBalance=parseMoney($('#cardOpening').value)||Number(card.openingBalance||0); card.dueDay=Number($('#cardDue').value||card.dueDay||10);} const amount=parseMoney($('#cardPurchase').value); if(amount>0){const m=ensureMonth(); m.cardPurchases.push({id:uid(),cardId:card.id,purchaseDate:today(),description:$('#cardDesc').value||'Compra no cartão',totalAmount:amount,installmentCount:Math.max(1,Number($('#cardParc').value||1)),category:'Cartão'});} state.selectedCardId=card.id; closeModal(); save(); render();};
   }
   function openCounterpartyForm(){
     openModal('Devedor / empresa',`<div class="form-grid"><div class="field"><label>Nome</label><input id="cpName" placeholder="Ex.: João, Cliente, Empresa"></div><div class="field"><label>Observação</label><input id="cpNote" placeholder="Ex.: Me deve / Eu devo"></div><button id="saveCp" class="btn primary">Salvar devedor</button></div>`);
     $('#saveCp').onclick=()=>{const name=$('#cpName').value.trim(); if(!name)return alert('Digite um nome.'); state.counterparties.push({id:uid(),name,note:$('#cpNote').value.trim()}); closeModal(); save(); render();};
+  }
+
+
+  function openCardPurchaseEditForm(p, originMonth){
+    if(!p)return;
+    openModal('Editar compra no cartão',`<div class="form-grid two"><div class="field"><label>Data da compra</label><input id="editCardDate" type="date" value="${esc(p.purchaseDate||today())}"></div><div class="field"><label>Descrição</label><input id="editCardDesc" value="${esc(p.description||'Compra no cartão')}"></div><div class="field"><label>Valor total</label><input id="editCardAmount" value="${money(p.totalAmount||0)}" inputmode="numeric" data-money="brl"></div><div class="field"><label>Parcelas</label><input id="editCardParc" type="number" value="${esc(p.installmentCount||1)}"></div><div class="field"><label>Conta/cartão</label><select id="editCardId">${cardOptions(p.cardId||p.accountId||state.selectedCardId,false)}</select></div><div class="field"><label>Categoria</label><select id="editCardCat">${categoryOptions(p.category||'Cartão')}</select></div><div class="field"><label>Vincular a devedor / empresa</label><select id="editCardCounterparty">${counterpartyOptions(p.counterpartyId||'')}</select></div><div class="field"><label>Status</label><select id="editCardStatus"><option value="paid" ${p.status==='paid'?'selected':''}>Pago</option><option value="pending" ${p.status==='pending'?'selected':''}>Pendente</option><option value="not_paid" ${p.status==='not_paid'?'selected':''}>Não pago</option></select></div><div class="field" style="grid-column:1/-1"><label>Observação</label><textarea id="editCardNote" rows="3">${esc(p.note||'')}</textarea></div><div class="modal-actions" style="grid-column:1/-1"><button id="saveCardPurchase" class="btn primary">Salvar alterações</button><button id="deleteCardPurchase" class="btn danger" type="button">Excluir</button></div></div>`,'Compra no cartão');
+    $('#saveCardPurchase').onclick=()=>{
+      const newMonth=($('#editCardDate').value||today()).slice(0,7);
+      ensureMonth(newMonth);
+      const oldM=ensureMonth(originMonth||state.selectedMonthKey);
+      oldM.cardPurchases=(oldM.cardPurchases||[]).filter(x=>x.id!==p.id);
+      const cardId=$('#editCardId').value||state.selectedCardId||'';
+      state.months[newMonth].cardPurchases.push({...p,id:p.id,purchaseDate:$('#editCardDate').value||today(),description:$('#editCardDesc').value||'Compra no cartão',totalAmount:parseMoney($('#editCardAmount').value),installmentCount:Math.max(1,Number($('#editCardParc').value||1)),cardId,accountId:cardId,category:$('#editCardCat').value||'Cartão',status:$('#editCardStatus').value||'paid',counterpartyId:$('#editCardCounterparty').value||'',note:$('#editCardNote').value.trim()});
+      state.selectedMonthKey=newMonth; closeModal(); save(); render();
+    };
+    $('#deleteCardPurchase').onclick=()=>deleteTransaction('card',p.id,originMonth||state.selectedMonthKey,true);
+  }
+
+  function deleteTransaction(source,id,month,closeAfter=false){
+    const found=findTransaction(source,id,month); const x=found.item; if(!x)return;
+    const checkMonth=source==='card'?(found.originMonth||month||state.selectedMonthKey):(month||state.selectedMonthKey);
+    if(!assertMonthOpen(checkMonth)) return;
+    const label=x.description||found.type||'lançamento';
+    if(!confirm(`Excluir "${label}"? Essa ação não pode ser desfeita.`))return;
+    const targetMonth=month||found.originMonth||state.selectedMonthKey;
+    const m=ensureMonth(targetMonth);
+    if(source==='income') m.incomes=(m.incomes||[]).filter(item=>item.id!==id);
+    if(source==='outflow') m.outflows=(m.outflows||[]).filter(item=>item.id!==id);
+    if(source==='card'){
+      const origin=found.originMonth||targetMonth;
+      const cm=ensureMonth(origin);
+      cm.cardPurchases=(cm.cardPurchases||[]).filter(item=>item.id!==id);
+    }
+    if(closeAfter) closeModal();
+    save(); render();
+  }
+
+  function editTransaction(source,id,month){
+    const found=findTransaction(source,id,month); const x=found.item; if(!x)return;
+    if(source==='income') return openTxForm('income',{item:x,month:month||state.selectedMonthKey});
+    if(source==='outflow') return openTxForm('expense',{item:x,month:month||state.selectedMonthKey});
+    if(source==='card') return openCardPurchaseEditForm(x,found.originMonth||month||state.selectedMonthKey);
   }
 
   function counterpartyRows(id,ignoreCard=false){
@@ -456,7 +612,7 @@
     const cp=x.counterpartyId?counterpartyName(x.counterpartyId):'';
     const date=x.date||x.purchaseDate||`${month||found.originMonth||state.selectedMonthKey}-01`;
     const amount=x.amount??x.totalAmount??0;
-    openModal(found.type,`<div class="tx-detail-card"><div class="tx-ico ${found.cls}">${found.type==='Receita'?'↗':found.type==='Cartão'?'💳':'↘'}</div><h3>${esc(x.description||found.type)}</h3><strong class="tx-detail-value ${found.cls}">${found.sign} ${money(amount)}</strong></div><div class="detail-grid"><div><span>ID interno</span><strong>${esc(x.id||id)}</strong></div><div><span>Data</span><strong>${esc(longDate(date))}</strong></div><div><span>Categoria</span><strong>${esc(x.category||'Outros')}</strong></div><div><span>Status</span><strong>${esc(statusLabel(x.status))}</strong></div><div><span>Devedor / empresa</span><strong>${esc(cp||'Sem vínculo')}</strong></div><div><span>Origem</span><strong>${esc(found.type==='Cartão'?'Compra no cartão':(x.method||'Carteira'))}</strong></div></div><div class="note-box detail-note"><strong>Observação</strong><br>${esc(x.note||'Sem observação cadastrada.')}</div>`,'Detalhe do lançamento');
+    openModal(found.type,`<div class="tx-detail-card"><div class="tx-ico ${found.cls}">${found.type==='Receita'?'↗':found.type==='Cartão'?'💳':'↘'}</div><h3>${esc(x.description||found.type)}</h3><strong class="tx-detail-value ${found.cls}">${found.sign} ${money(amount)}</strong></div><div class="detail-grid"><div><span>ID interno</span><strong>${esc(x.id||id)}</strong></div><div><span>Data</span><strong>${esc(longDate(date))}</strong></div><div><span>Categoria</span><strong>${esc(x.category||'Outros')}</strong></div><div><span>Status</span><strong>${esc(statusLabel(x.status))}</strong></div><div><span>Devedor / empresa</span><strong>${esc(cp||'Sem vínculo')}</strong></div><div><span>Origem</span><strong>${esc(found.type==='Cartão'?'Compra no cartão':(x.method||'Carteira'))}</strong></div></div><div class="note-box detail-note"><strong>Observação</strong><br>${esc(x.note||'Sem observação cadastrada.')}</div><div class="modal-actions tx-detail-actions"><button class="btn soft" data-duplicate-tx="${esc(id)}" data-duplicate-source="${esc(source)}" data-duplicate-month="${esc(month||found.originMonth||state.selectedMonthKey)}">Duplicar</button><button class="btn primary" data-edit-tx="${esc(id)}" data-edit-source="${esc(source)}" data-edit-month="${esc(month||found.originMonth||state.selectedMonthKey)}">Editar</button><button class="btn danger" data-delete-tx="${esc(id)}" data-delete-source="${esc(source)}" data-delete-month="${esc(month||found.originMonth||state.selectedMonthKey)}">Excluir</button></div>`,'Detalhe do lançamento');
   }
   function openCardDetail(id){
     const c=state.cards.find(x=>x.id===id); if(!c)return;
@@ -464,9 +620,86 @@
     const body=`<div class="tx-detail-card"><div class="tx-ico card">💳</div><h3>${esc(c.bank||'Conta')} • ${esc(c.name||'Principal')}</h3><strong class="tx-detail-value">${money(t.balance)}</strong><p class="muted">Saldo inicial ${money(c.openingBalance||0)} • vence dia ${esc(c.dueDay||'-')}</p></div><div class="detail-kpis"><div><span>Receitas</span><strong class="in">${money(t.income)}</strong></div><div><span>Despesas</span><strong class="out">${money(t.expenses)}</strong></div><div><span>Faturas</span><strong>${money(t.cards)}</strong></div></div><h3>Devedores dessa conta</h3><div class="transaction-list">${debtors.length?debtors.map(({cp,r})=>`<div class="tx-row clickable" data-cp-open="${esc(cp.id)}"><div class="tx-ico in">👥</div><div class="tx-main"><strong>${esc(cp.name)}</strong><small>${r.count} lançamento(s) • saldo pendente ${money(r.balance)}</small></div><div class="tx-value ${r.balance>=0?'in':'out'}">${money(r.balance)}</div></div>`).join(''):'<div class="empty">Nenhum devedor vinculado a essa conta.</div>'}</div><h3>Últimos lançamentos</h3><div class="transaction-list">${tx.length?tx.map(x=>`<div class="tx-row clickable" data-tx-id="${esc(x.txId||x.id)}" data-tx-source="${esc(x.source||x.type)}" data-tx-month="${esc(x.monthKey||state.selectedMonthKey)}"><div class="tx-ico ${x.type==='in'?'in':x.type==='card'?'card':'out'}">${x.type==='in'?'↗':x.type==='card'?'💳':'↘'}</div><div class="tx-main"><strong>${esc(x.title)}</strong><small>${esc(longDate(x.date||x.purchaseDate||`${state.selectedMonthKey}-01`))}</small></div><div class="tx-value ${x.type==='in'?'in':'out'}">${x.type==='in'?'+':'-'} ${money(x.amount)}</div></div>`).join(''):'<div class="empty">Sem lançamentos nessa conta.</div>'}</div><div class="modal-actions"><button class="btn primary" data-select-card="${esc(c.id)}">Usar esta conta</button></div>`;
     openModal('Resumo da conta/cartão',body,'Conta selecionada');
   }
+
+  function duplicateTransaction(source,id,month){
+    const found=findTransaction(source,id,month); const x=found.item; if(!x)return;
+    const baseMonth=source==='card'?(found.originMonth||month||state.selectedMonthKey):(month||state.selectedMonthKey);
+    if(!assertMonthOpen(state.selectedMonthKey)) return;
+    if(source==='card'){
+      const copy={...x,id:uid(),purchaseDate:today(),description:(x.description||'Compra')+' (cópia)'};
+      ensureMonth(state.selectedMonthKey).cardPurchases.push(copy);
+    }else{
+      const isIn=source==='income';
+      const copy={...x,id:uid(),date:today(),description:(x.description||(isIn?'Receita':'Despesa'))+' (cópia)'};
+      ensureMonth(state.selectedMonthKey)[isIn?'incomes':'outflows'].push(copy);
+    }
+    closeModal(); save(); render();
+  }
+
+  function applyRecurringToMonth(k=state.selectedMonthKey,notify=false){
+    const rules=Array.isArray(state.recurringRules)?state.recurringRules:[];
+    if(!rules.length || isMonthClosed(k)) return 0;
+    const m=ensureMonth(k); let added=0;
+    rules.filter(r=>r.active!==false && Number(r.amount||0)>0).forEach(r=>{
+      const list=r.type==='income'?'incomes':'outflows';
+      const exists=(m[list]||[]).some(x=>x.recurringRuleId===r.id && String(x.date||'').slice(0,7)===k);
+      if(exists) return;
+      const day=String(Math.min(28,Math.max(1,Number(r.day||1)))).padStart(2,'0');
+      m[list].push({
+        id:uid(), recurringRuleId:r.id, date:`${k}-${day}`, description:r.description, amount:Number(r.amount||0), category:r.category||'Outros',
+        status:r.status || (r.type==='income'?'pending':'pending'), method:'Recorrente', accountId:r.accountId||state.selectedCardId||'', counterpartyId:r.counterpartyId||'', note:r.note||'Criado automaticamente por recorrência.'
+      });
+      added++;
+    });
+    return added;
+  }
+
+  function recurringRulesHtml(){
+    const rules=Array.isArray(state.recurringRules)?state.recurringRules:[];
+    if(!rules.length) return '<div class="empty">Nenhum lançamento recorrente cadastrado ainda.</div>';
+    return rules.map(r=>`<div class="tx-row"><div class="tx-ico ${r.type==='income'?'in':'out'}">${r.type==='income'?'↗':'↘'}</div><div class="tx-main"><strong>${esc(r.description)}</strong><small>${r.type==='income'?'Receita':'Despesa'} • dia ${esc(r.day||1)} • ${esc(r.category||'Outros')} • ${esc(counterpartyName(r.counterpartyId)||'sem devedor')}</small></div><div class="debtor-actions"><strong class="tx-value ${r.type==='income'?'in':'out'}">${money(r.amount)}</strong><button class="btn danger" data-del-recurring="${esc(r.id)}">Excluir</button></div></div>`).join('');
+  }
+  function renderRecurringManager(){
+    openModal('Lançamentos recorrentes', `<div class="panel-subtitle muted">Cadastre contas fixas como aluguel, internet, salário e academia. Depois aplique no mês selecionado.</div><div class="modal-actions"><button class="btn primary" id="newRecurringBtn">+ Novo recorrente</button><button class="btn soft" data-apply-recurring="1">Aplicar neste mês</button></div><div class="transaction-list" style="margin-top:14px">${recurringRulesHtml()}</div>`, 'Recorrência');
+    $('#newRecurringBtn').onclick=openRecurringForm;
+  }
+  function openRecurringForm(){
+    openModal('Novo recorrente', `<div class="form-grid"><div class="field"><label>Tipo</label><select id="recType"><option value="expense">Despesa</option><option value="income">Receita</option></select></div><div class="field"><label>Descrição</label><input id="recDesc" placeholder="Aluguel, internet, salário..."></div><div class="field"><label>Valor</label><input id="recAmount" placeholder="R$ 0,00" inputmode="numeric" data-money="brl"></div><div class="field"><label>Dia do mês</label><input id="recDay" type="number" min="1" max="28" value="1"></div><div class="field"><label>Categoria</label><select id="recCat">${categoryOptions('Outros')}</select></div><div class="field"><label>Conta/cartão</label><select id="recAccount">${cardOptions(state.selectedCardId,false)}</select></div><div class="field"><label>Vincular a devedor / empresa</label><select id="recCounterparty">${counterpartyOptions()}</select></div><div class="field"><label>Observação</label><textarea id="recNote" rows="3" placeholder="Detalhe do recorrente"></textarea></div><button id="saveRecurring" class="btn primary">Salvar recorrente</button></div>`, 'Recorrência');
+    $('#saveRecurring').onclick=()=>{
+      const amount=parseMoney($('#recAmount').value); if(amount<=0) return alert('Digite um valor maior que zero.');
+      const type=$('#recType').value;
+      state.recurringRules=Array.isArray(state.recurringRules)?state.recurringRules:[];
+      state.recurringRules.push({id:uid(),type,description:$('#recDesc').value||'Lançamento recorrente',amount,day:Math.min(28,Math.max(1,Number($('#recDay').value||1))),category:$('#recCat').value||'Outros',accountId:$('#recAccount').value||'',counterpartyId:$('#recCounterparty').value||'',status:'pending',note:$('#recNote').value.trim(),active:true});
+      closeModal(); save(); renderRecurringManager();
+    };
+  }
+  function deleteRecurringRule(id){
+    const rule=(state.recurringRules||[]).find(r=>r.id===id); if(!rule)return;
+    if(!confirm(`Excluir recorrente "${rule.description}"? Os lançamentos já criados nos meses anteriores serão mantidos.`)) return;
+    state.recurringRules=(state.recurringRules||[]).filter(r=>r.id!==id);
+    save(); renderRecurringManager();
+  }
+
+  function pendingRows(){
+    const rows=[];
+    Object.entries(state.months||{}).forEach(([k,m])=>{
+      (m.incomes||[]).forEach(x=>{ if(matchesSelectedCard(x) && ['pending','not_received'].includes(String(x.status||''))) rows.push({...x,type:'in',source:'income',txId:x.id,monthKey:k,title:x.description||'Receita'}); });
+      (m.outflows||[]).forEach(x=>{ if(matchesSelectedCard(x) && ['pending','not_paid'].includes(String(x.status||''))) rows.push({...x,type:'out',source:'outflow',txId:x.id,monthKey:k,title:x.description||'Despesa'}); });
+    });
+    return rows.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+  }
+  function renderPendingScreen(){
+    const rows=pendingRows();
+    const rec=rows.filter(x=>x.type==='in').reduce((a,x)=>a+Number(x.amount||0),0);
+    const pay=rows.filter(x=>x.type==='out').reduce((a,x)=>a+Number(x.amount||0),0);
+    const byPerson={}; rows.forEach(x=>{const n=counterpartyName(x.counterpartyId)||'Sem devedor'; byPerson[n]=(byPerson[n]||0)+(x.type==='in'?Number(x.amount||0):-Number(x.amount||0));});
+    title('Pendências','Tudo que está a receber, a pagar, vencido ou pendente.');
+    $('#appContent').innerHTML=`${accountSelectorHtml()}<section class="panel"><div class="detail-kpis"><div><span>A receber</span><strong class="in">${money(rec)}</strong></div><div><span>A pagar</span><strong class="out">${money(pay)}</strong></div><div><span>Saldo pendente</span><strong>${money(rec-pay)}</strong></div></div></section><section class="panel"><h2>Por pessoa/devedor</h2><div class="transaction-list">${Object.entries(byPerson).map(([k,v])=>`<div class="tx-row"><div class="tx-ico in">👥</div><div class="tx-main"><strong>${esc(k)}</strong><small>Saldo pendente</small></div><div class="tx-value ${v>=0?'in':'out'}">${money(v)}</div></div>`).join('')||'<div class="empty">Nenhuma pendência por pessoa.</div>'}</div></section><section class="panel"><h2>Lista de pendências</h2><div class="transaction-list">${rows.map(x=>`<div class="tx-row clickable" data-tx-id="${esc(x.txId)}" data-tx-source="${esc(x.source)}" data-tx-month="${esc(x.monthKey)}"><div class="tx-ico ${x.type==='in'?'in':'out'}">${x.type==='in'?'↗':'↘'}</div><div class="tx-main"><strong>${esc(x.title)}</strong><small>${esc(longDate(x.date||`${x.monthKey}-01`))} • ${esc(statusLabel(x.status))} • ${esc(counterpartyName(x.counterpartyId)||'Sem devedor')}</small></div><div class="tx-value ${x.type==='in'?'in':'out'}">${x.type==='in'?'+':'-'} ${money(x.amount)}</div></div>`).join('')||'<div class="empty">Nada pendente. Muito bom!</div>'}</div></section>`;
+    bindDynamicHandlers($('#appContent'));
+  }
   function openProfile(){
     const m=ensureMonth();
-    openModal('Perfil e saldo',`<div class="form-grid"><div class="field"><label>Nome</label><input id="pName" value="${state.profile.name||''}"></div><div class="field"><label>Saldo inicial do mês</label><input id="pOpening" value="${money(m.openingBalance)}"></div><div class="field"><label>Meta de guardar</label><input id="pGoal" value="${money(m.saveGoal)}"></div><div class="field"><label>Guardado no mês</label><input id="pSaved" value="${money(m.savedThisMonth)}"></div><button id="saveProfile" class="btn primary">Salvar</button></div>`,'Configurações');
+    openModal('Perfil e saldo',`<div class="form-grid"><div class="field"><label>Nome</label><input id="pName" value="${state.profile.name||''}"></div><div class="field"><label>Saldo inicial do mês</label><input id="pOpening" value="${money(m.openingBalance)}" inputmode="numeric" data-money="brl"></div><div class="field"><label>Meta de guardar</label><input id="pGoal" value="${money(m.saveGoal)}" inputmode="numeric" data-money="brl"></div><div class="field"><label>Guardado no mês</label><input id="pSaved" value="${money(m.savedThisMonth)}" inputmode="numeric" data-money="brl"></div><button id="saveProfile" class="btn primary">Salvar</button></div>`,'Configurações');
     $('#saveProfile').onclick=()=>{state.profile.name=$('#pName').value||'Usuário';m.openingBalance=parseMoney($('#pOpening').value);m.saveGoal=parseMoney($('#pGoal').value);m.savedThisMonth=parseMoney($('#pSaved').value);closeModal();save();render();};
   }
   function copySummary(){const t=totals(); const txt=`Resumo ${monthLabel(state.selectedMonthKey)}\nReceitas: ${money(t.income)}\nDespesas: ${money(t.expenses)}\nSaldo: ${money(t.balance)}`; navigator.clipboard?.writeText(txt); alert('Resumo copiado.');}
@@ -476,6 +709,7 @@
   function closeFab(){$('#fabMenu').classList.add('hidden');$('#fabBackdrop').classList.add('hidden');$('#fabBtn').classList.remove('open');}
   function boot(){
     ensureMonth();
+    applyRecurringToMonth(state.selectedMonthKey,false);
     if(state.__migration?.needsSave){
       console.info('Migração de dados financeiros aplicada:', state.__migration);
       save();
@@ -489,15 +723,25 @@
       if(cardDetail){e.preventDefault();e.stopPropagation(); openCardDetail(cardDetail.dataset.cardDetail); return;}
       const newCard=e.target.closest('[data-action-card="new"]');
       if(newCard){e.preventDefault();e.stopPropagation(); openAction('card'); return;}
+      const duplicateTx=e.target.closest('[data-duplicate-tx]');
+      if(duplicateTx){e.preventDefault();e.stopPropagation(); duplicateTransaction(duplicateTx.dataset.duplicateSource,duplicateTx.dataset.duplicateTx,duplicateTx.dataset.duplicateMonth); return;}
+      const delRec=e.target.closest('[data-del-recurring]');
+      if(delRec){e.preventDefault();e.stopPropagation(); deleteRecurringRule(delRec.dataset.delRecurring); return;}
+      const applyRec=e.target.closest('[data-apply-recurring]');
+      if(applyRec){e.preventDefault();e.stopPropagation(); const added=applyRecurringToMonth(state.selectedMonthKey,true); alert(added?`${added} recorrente(s) aplicado(s).`:'Nenhum recorrente novo para aplicar neste mês.'); save(); render(); return;}
+      const editTx=e.target.closest('[data-edit-tx]');
+      if(editTx){e.preventDefault();e.stopPropagation(); editTransaction(editTx.dataset.editSource,editTx.dataset.editTx,editTx.dataset.editMonth); return;}
+      const deleteTx=e.target.closest('[data-delete-tx]');
+      if(deleteTx){e.preventDefault();e.stopPropagation(); deleteTransaction(deleteTx.dataset.deleteSource,deleteTx.dataset.deleteTx,deleteTx.dataset.deleteMonth,true); return;}
       const cp=e.target.closest('[data-cp-open]');
       if(cp){e.preventDefault();e.stopPropagation(); openCounterpartyDetail(cp.dataset.cpOpen); return;}
       const tx=e.target.closest('[data-tx-id]');
       if(tx){e.preventDefault();openTransactionDetail(tx.dataset.txSource,tx.dataset.txId,tx.dataset.txMonth);}
     });
     $$('.seg-tab,.bottom-item,.rail-btn[data-screen]').forEach(b=>b.onclick=()=>setScreen(b.dataset.screen));
-    $('#prevMonthBtn').onclick=()=>{state.selectedMonthKey=shiftMonth(state.selectedMonthKey,-1);ensureMonth();save();render();};
-    $('#nextMonthBtn').onclick=()=>{state.selectedMonthKey=shiftMonth(state.selectedMonthKey,1);ensureMonth();save();render();};
-    $('#monthPickerBtn').onclick=()=>{const v=prompt('Digite o mês no formato AAAA-MM',state.selectedMonthKey); if(/^\d{4}-\d{2}$/.test(v||'')){state.selectedMonthKey=v;ensureMonth();save();render();}};
+    $('#prevMonthBtn').onclick=()=>{state.selectedMonthKey=shiftMonth(state.selectedMonthKey,-1);ensureMonth();applyRecurringToMonth(state.selectedMonthKey,true);save();render();};
+    $('#nextMonthBtn').onclick=()=>{state.selectedMonthKey=shiftMonth(state.selectedMonthKey,1);ensureMonth();applyRecurringToMonth(state.selectedMonthKey,true);save();render();};
+    $('#monthPickerBtn').onclick=()=>{const v=prompt('Digite o mês no formato AAAA-MM',state.selectedMonthKey); if(/^\d{4}-\d{2}$/.test(v||'')){state.selectedMonthKey=v;ensureMonth();applyRecurringToMonth(state.selectedMonthKey,true);save();render();}};
     $('#fabBtn').onclick=toggleFab; $('#fabBackdrop').onclick=closeFab; $$('#fabMenu [data-action]').forEach(b=>b.onclick=()=>openAction(b.dataset.action));
     $('#quickSettingsBtn').onclick=()=>setScreen('more'); $('#menuToggleBtn').onclick=toggleFab; $('#railThemeBtn').onclick=toggleTheme; $('#railLogoutBtn').onclick=logout; render();
   }

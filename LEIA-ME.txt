@@ -1,37 +1,25 @@
-AAA Finance — V3 com migração de dados
+AAA Finance - versão com edição/exclusão de lançamentos
 
-Arquivos do pacote:
-- index.html
-- app.html
-- style.css
-- script.js
-- reset-password.html
+Arquivos principais:
+- index.html: login/cadastro/admin
+- app.html: estrutura da aplicação
+- style.css: layout visual
+- script.js: lógica financeira, contas/cartões, devedores, edição/exclusão e máscara de valores
 
-O que esta versão faz:
-1. Mantém o login e a proteção de dados.
-2. Migra automaticamente dados antigos ao abrir o app.
-3. Cria uma conta padrão chamada "Carteira • Conta principal" quando existirem lançamentos antigos sem conta/cartão vinculado.
-4. Corrige entradas antigas sem accountId.
-5. Corrige despesas antigas sem accountId.
-6. Corrige compras de cartão antigas sem cardId.
-7. Mantém IDs antigos quando já existirem.
-8. Cria IDs internos apenas para registros antigos que não tinham ID.
-9. Mantém o histórico financeiro, sem apagar transações.
-10. Salva o estado migrado automaticamente no localStorage e no Supabase quando o usuário abre o app.
+O que foi incluído nesta versão:
+1. Campo de valores com máscara brasileira estilo calculadora.
+2. Botões Editar e Excluir no detalhe de cada transação.
+3. Edição de receita.
+4. Edição de despesa.
+5. Edição de compra no cartão.
+6. Exclusão de receita/despesa/compra no cartão com confirmação.
+7. Mantida a migração dos dados antigos para conta principal.
+8. Mantido filtro por conta/cartão.
 
-Regra principal da migração:
-- Todo lançamento antigo sem conta/cartão vai para: Carteira • Conta principal.
-- Cartões antigos continuam aparecendo.
-- Devedores antigos continuam aparecendo.
-- Transações vinculadas a devedores continuam sendo lidas pelo ID do devedor.
-
-Como usar:
-1. Faça backup dos arquivos atuais.
-2. Substitua os arquivos do projeto por estes arquivos.
-3. Abra o app com um usuário que já tinha dados antigos.
-4. Veja em "Todas" se aparecem todas as transações.
-5. Veja em "Carteira • Conta principal" os lançamentos antigos sem conta/cartão.
-6. Novas receitas/despesas já poderão ser cadastradas escolhendo a conta/cartão.
-
-Observação importante:
-A migração roda uma vez de forma automática, mas ela é segura para rodar mais vezes. Ela não apaga histórico.
+Como testar:
+1. Abra o app com um usuário real.
+2. Clique em uma despesa na lista.
+3. Clique em Editar e altere valor/data/status/conta/devedor.
+4. Salve e confira o dashboard.
+5. Clique de novo e teste Excluir.
+6. Faça o mesmo com receita e compra no cartão.
