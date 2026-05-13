@@ -7,11 +7,18 @@
   const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
   const today=()=>new Date().toISOString().slice(0,10);
   const monthKey=()=>new Date().toISOString().slice(0,7);
+  function defaultDateForMonth(k){
+    const target = k || state?.selectedMonthKey || monthKey();
+    const now = today();
+    return now.slice(0,7) === target ? now : `${target}-01`;
+  }
   const MAIN_ACCOUNT_ID = 'main-account';
   const DATA_SCHEMA_VERSION = 6;
   const state = normalize(loadInitial());
   let saveTimer=null;
-  let activeScreen=state.activeScreen||'home';
+  // Ao recarregar/F5, o app sempre deve iniciar na Principal.
+  // Não reaproveitamos a última aba salva para evitar menu e conteúdo desencontrados.
+  let activeScreen='home';
   let openSummaryAccordion = null;
   let txSearch = '';
   let txStatusFilter = 'all';
@@ -22,10 +29,11 @@
       const remoteUpdated = Number(nextState?.__updatedAt || nextState?.__lastSavedAt || 0);
       if(localUpdated && remoteUpdated && localUpdated > remoteUpdated + 1000) return;
       const normalized = normalize(nextState || {});
-      const currentScreen = activeScreen;
+      const currentScreen = activeScreen || 'home';
       Object.keys(state).forEach(k=>delete state[k]);
       Object.assign(state, normalized);
-      activeScreen = state.activeScreen || currentScreen || 'home';
+      // Sincronização remota não deve trocar a tela aberta nem restaurar aba antiga.
+      activeScreen = currentScreen;
       ensureMonth();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       showSync('Atualizado', 'saved', 1400);
@@ -209,7 +217,7 @@
       __schemaVersion: DATA_SCHEMA_VERSION,
       __migration: migration,
       theme:raw.theme||'dark',
-      activeScreen:raw.activeScreen||'home',
+      activeScreen:'home',
       selectedMonthKey:selectedMonth,
       selectedCardId,
       profile:{name:raw.profile?.name||raw.profile?.display_name||'Matheus', email:raw.profile?.email||BOOT.user?.email||'', photo:raw.profile?.photo||'', fixedSalary:asNumber(raw.profile?.fixedSalary||0), defaultSaveGoal:asNumber(raw.profile?.defaultSaveGoal||0), savingsPotBase:asNumber(raw.profile?.savingsPotBase||0), fixedIncomes:asArray(raw.profile?.fixedIncomes), fixedOutflows:asArray(raw.profile?.fixedOutflows)},
@@ -243,7 +251,7 @@
   }
   function isMonthClosed(k=state.selectedMonthKey){ return !!ensureMonth(k).closed; }
   function assertMonthOpen(k=state.selectedMonthKey){
-    if(isMonthClosed(k)){ alert('Este mês está fechado/conferido. Reabra o mês para editar, excluir ou cadastrar lançamentos.'); return false; }
+    if(isMonthClosed(k)){ alert(`O mês ${monthLabel(k)} está fechado/conferido. Reabra esse mês para editar, excluir ou cadastrar lançamentos.`); return false; }
     return true;
   }
   function setMonthClosed(k=state.selectedMonthKey,closed=true){ ensureMonth(k).closed=!!closed; save(); render(); }
@@ -370,6 +378,7 @@
     return first+state.cards.map(c=>`<option value="${esc(c.id)}" ${selected===c.id?'selected':''}>${esc(c.bank||'Conta')} • ${esc(c.name||'Principal')}</option>`).join('');
   }
   function matchesSelectedCard(x){return !state.selectedCardId || x.accountId===state.selectedCardId || x.cardId===state.selectedCardId;}
+  function matchesCardId(x, cardId='') { return !cardId || x.accountId===cardId || x.cardId===cardId; }
   function setSelectedCard(cardId){state.selectedCardId=cardId||''; save(); render();}
   function accountSelectorHtml(){
     const active=state.selectedCardId||'';
@@ -377,8 +386,44 @@
       .concat(state.cards.map(c=>`<button class="account-chip ${active===c.id?'active':''}" data-select-card="${esc(c.id)}"><span>💳</span><strong>${esc(c.bank||'Conta')}</strong><small>${esc(c.name||'Principal')}</small></button>`));
     return `<section class="account-strip"><div class="account-strip-head"><div><strong>Conta selecionada</strong><small>${esc(selectedCardLabel())}</small></div><button class="btn soft mini" data-action-card="new">+ Conta/cartão</button></div><div class="account-chips">${chips.join('')}</div></section>`;
   }
-  function cardOpeningForSelected(k=state.selectedMonthKey){const c=activeCard(); return c?Number(c.openingBalance||0):Number(ensureMonth(k).openingBalance||0);}
-  function cardBalance(cardId,k=state.selectedMonthKey){const prev=state.selectedCardId; state.selectedCardId=cardId||''; const t=totals(k); state.selectedCardId=prev; return t.balance;}
+  function explicitOpeningForCard(k=state.selectedMonthKey, cardId=state.selectedCardId){
+    if(cardId){
+      const c=state.cards.find(x=>x.id===cardId);
+      return Number(c?.openingBalance||0);
+    }
+    return Number(ensureMonth(k).openingBalance||0);
+  }
+  function previousExistingMonth(k){
+    // Regra de saldo encadeado:
+    // o saldo inicial do mês atual deve vir do SALDO FIM DO MÊS anterior.
+    // Ex.: abril começa com 1000, gasta 900 e termina com 100; maio começa com 100.
+    // Se o mês imediatamente anterior ainda não existir no objeto, usa o último mês anterior disponível.
+    const prev=shiftMonth(k,-1);
+    if(state.months && state.months[prev]) return prev;
+    const keys=Object.keys(state.months||{}).filter(x=>/^\d{4}-\d{2}$/.test(x) && x<k).sort();
+    return keys.length ? keys[keys.length-1] : '';
+  }
+  function monthlyMovement(k=state.selectedMonthKey, cardId=state.selectedCardId){
+    const m=ensureMonth(k);
+    const income=m.incomes.filter(x=>matchesCardId(x,cardId)&&x.status!=='not_received').reduce((a,x)=>a+Number(x.amount||0),0);
+    const out=m.outflows.filter(x=>matchesCardId(x,cardId)&&x.status!=='not_paid').reduce((a,x)=>a+Number(x.amount||0),0);
+    const cards=cardInstallmentsForMonth(k,cardId||'all').reduce((a,x)=>a+Number(x.amount||0),0);
+    const saved=Number(m.savedThisMonth||0);
+    return {income,out,cards,saved,expenses:out+cards,saveGoal:Number(m.saveGoal||0)};
+  }
+  function monthEndBalance(k=state.selectedMonthKey, cardId=state.selectedCardId, stack=new Set()){
+    if(stack.has(k)) return explicitOpeningForCard(k,cardId);
+    stack.add(k);
+    const prev=previousExistingMonth(k);
+    const opening=prev ? monthEndBalance(prev,cardId,stack) : explicitOpeningForCard(k,cardId);
+    const mov=monthlyMovement(k,cardId);
+    return opening+mov.income-mov.out-mov.cards-mov.saved;
+  }
+  function cardOpeningForSelected(k=state.selectedMonthKey, cardId=state.selectedCardId){
+    const prev=previousExistingMonth(k);
+    return prev ? monthEndBalance(prev, cardId) : explicitOpeningForCard(k, cardId);
+  }
+  function cardBalance(cardId,k=state.selectedMonthKey){return totals(k,cardId||'').balance;}
   function monthLabel(k){const [y,m]=k.split('-').map(Number);return new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'short',year:'numeric'}).replace('.','');}
   function longDate(date){try{return new Date(date+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit'});}catch{return date}}
   function shiftMonth(k,o){const [y,m]=k.split('-').map(Number);const d=new Date(y,m-1+o,1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`}
@@ -387,14 +432,12 @@
   function cardInstallmentsForMonth(k,cardId='all'){
     const rows=[]; Object.entries(state.months).forEach(([origin,m])=>{ensureMonth(origin).cardPurchases.forEach(p=>{if(cardId!=='all'&&p.cardId!==cardId)return; installmentAmounts(p.totalAmount,p.installmentCount||1).forEach((amt,i)=>{if(shiftMonth(origin,i)===k) rows.push({...p, amount:amt, type:'card', installment:`${i+1}/${p.installmentCount||1}`});});});}); return rows;
   }
-  function totals(k=state.selectedMonthKey){
+  function totals(k=state.selectedMonthKey, cardId=state.selectedCardId){
     const m=ensureMonth(k);
-    const income=m.incomes.filter(x=>matchesSelectedCard(x)&&x.status!=='not_received').reduce((a,x)=>a+Number(x.amount||0),0);
-    const out=m.outflows.filter(x=>matchesSelectedCard(x)&&x.status!=='not_paid').reduce((a,x)=>a+Number(x.amount||0),0);
-    const cards=cardInstallmentsForMonth(k,state.selectedCardId||'all').reduce((a,x)=>a+Number(x.amount||0),0);
-    const opening=cardOpeningForSelected(k);
-    const balance=opening+income-out-cards-Number(m.savedThisMonth||0);
-    return {opening,income,out,cards,balance,expenses:out+cards,saved:Number(m.savedThisMonth||0),saveGoal:Number(m.saveGoal||0)}
+    const mov=monthlyMovement(k,cardId||'');
+    const opening=cardOpeningForSelected(k,cardId||'');
+    const balance=opening+mov.income-mov.out-mov.cards-mov.saved;
+    return {opening,income:mov.income,out:mov.out,cards:mov.cards,balance,expenses:mov.expenses,saved:mov.saved,saveGoal:mov.saveGoal}
   }
   function save(){
     state.activeScreen=activeScreen; ensureMonth();
@@ -434,8 +477,18 @@
     });
   }
 
+  function syncActiveNavigation(){
+    $$('.seg-tab,.bottom-item,.rail-btn').forEach(b=>{
+      const isActive = b.dataset.screen === activeScreen;
+      b.classList.toggle('active', isActive);
+      if(isActive) b.setAttribute('aria-current','page');
+      else b.removeAttribute('aria-current');
+    });
+  }
+
   function render(){
     document.body.classList.toggle('theme-light',state.theme==='light'); ensureMonth();
+    syncActiveNavigation();
     $('#monthLabelTop').textContent=monthLabel(state.selectedMonthKey);
     if(activeScreen==='home') renderHome();
     if(activeScreen==='transactions') renderTransactions();
@@ -444,6 +497,7 @@
     if(activeScreen==='cards') renderCardsManager();
     if(activeScreen==='pending') renderPendingScreen();
     bindDynamicHandlers();
+    bindSwipeDeleteRows();
     applyNoPasswordManager();
     enhanceSelects();
   }
@@ -477,7 +531,7 @@
       const sign=r.type==='in'?'+':'-';
       const cp=r.counterpartyId?counterpartyName(r.counterpartyId):'';
       const meta=[r.category||'Outros', r.type==='card'?'Cartão':(r.method||'Carteira'), cp?`Devedor: ${cp}`:''].filter(Boolean).join(' | ');
-      html+=`<div class="tx-row clickable" data-tx-id="${esc(r.txId||r.id)}" data-tx-source="${esc(r.source||r.type)}" data-tx-month="${esc(r.monthKey||state.selectedMonthKey)}"><div class="tx-ico ${cls}">${r.type==='in'?'↗':r.type==='card'?'💳':'↘'}</div><div class="tx-main"><strong>${esc(r.title)}</strong><small>${esc(meta)}${r.installment?' • '+esc(r.installment):''}</small></div><div class="tx-value ${r.type==='in'?'in':'out'}">${sign} ${money(r.amount)}<span class="check">✓</span></div></div>`;
+      html+=`<div class="tx-row clickable swipe-delete-row" data-tx-id="${esc(r.txId||r.id)}" data-tx-source="${esc(r.source||r.type)}" data-tx-month="${esc(r.monthKey||state.selectedMonthKey)}" data-tx-title="${esc(r.title)}"><div class="swipe-delete-bg">Excluir</div><div class="tx-ico ${cls}">${r.type==='in'?'↗':r.type==='card'?'💳':'↘'}</div><div class="tx-main"><strong>${esc(r.title)}</strong><small>${esc(meta)}${r.installment?' • '+esc(r.installment):''}</small></div><div class="tx-value ${r.type==='in'?'in':'out'}">${sign} ${money(r.amount)}<span class="check">✓</span></div></div>`;
     }); return html;
   }
   function renderTransactions(){
@@ -485,7 +539,7 @@
     const t=totals();
     const closed=isMonthClosed();
     title('Transações','Lista por dia, busca, status, edição, duplicação e fechamento do mês.');
-    $('#appContent').innerHTML=`${accountSelectorHtml()}<section class="panel"><div class="balance-subgrid"><div class="mini-kpi"><span>Saldo fim do mês</span><strong style="color:var(--green)">${money(t.balance)}</strong></div><div class="mini-kpi"><span>Balanço mensal</span><strong>${money(t.income-t.expenses)}</strong></div></div>${closed?'<div class="month-closed-badge">🔒 Mês fechado/conferido</div>':''}</section><section class="panel"><div class="transaction-toolbar"><div class="field search-field"><label>Buscar transação</label><input id="txSearchInput" value="${esc(txSearch)}" placeholder="mercado, pix, cartão, João..." /></div>${statusFilterDropdownHtml()}</div><div class="panel-head"><div><h2>${monthLabel(state.selectedMonthKey)}</h2><p class="muted">Receitas, despesas, cartões e recorrentes</p></div><div class="actions-row"><button class="btn soft" id="toggleCloseMonthBtn">${closed?'Reabrir mês':'Fechar mês'}</button><button class="btn soft" id="recurringTopBtn">Recorrentes</button><button class="btn primary" id="addTxTop" ${closed?'disabled':''}>Adicionar</button></div></div><div class="transaction-list">${txListHtml()}</div></section>`;
+    $('#appContent').innerHTML=`${accountSelectorHtml()}<section class="panel"><div class="balance-subgrid balance-subgrid-3"><div class="mini-kpi"><span>Saldo inicial do mês</span><strong>${money(t.opening)}</strong></div><div class="mini-kpi"><span>Balanço mensal</span><strong>${money(t.income-t.expenses)}</strong></div><div class="mini-kpi"><span>Saldo fim do mês</span><strong style="color:var(--green)">${money(t.balance)}</strong></div></div><p class="muted saldo-rule-note">O saldo inicial deste mês vem automaticamente do saldo fim do mês anterior.</p>${closed?'<div class="month-closed-badge">🔒 Mês fechado/conferido</div>':''}</section><section class="panel"><div class="transaction-toolbar"><div class="field search-field"><label>Buscar transação</label><input id="txSearchInput" value="${esc(txSearch)}" placeholder="mercado, pix, cartão, João..." /></div>${statusFilterDropdownHtml()}</div><div class="panel-head"><div><h2>${monthLabel(state.selectedMonthKey)}</h2><p class="muted">Receitas, despesas, cartões e recorrentes</p></div><div class="actions-row"><button class="btn soft" id="toggleCloseMonthBtn">${closed?'Reabrir mês':'Fechar mês'}</button><button class="btn soft" id="recurringTopBtn">Recorrentes</button><button class="btn primary" id="addTxTop" ${closed?'disabled':''}>Adicionar</button></div></div><div class="transaction-list">${txListHtml()}</div></section>`;
     $('#addTxTop').onclick=()=> closed ? alert('Mês fechado. Reabra para adicionar lançamentos.') : toggleFab();
     $('#recurringTopBtn').onclick=renderRecurringManager;
     $('#toggleCloseMonthBtn').onclick=()=>setMonthClosed(state.selectedMonthKey,!closed);
@@ -544,7 +598,7 @@
   }
   function cardListHtml(){
     if(!state.cards.length)return '<div class="empty">Nenhuma conta/cartão cadastrado. Clique em Cartões para criar.</div>';
-    return `<div class="card-account-grid">${state.cards.map(c=>{const prev=state.selectedCardId; state.selectedCardId=c.id; const t=totals(); state.selectedCardId=prev; return `<button class="account-card ${prev===c.id?'active':''}" data-card-detail="${esc(c.id)}"><span>💳</span><strong>${esc(c.bank||'Conta')} • ${esc(c.name||'Principal')}</strong><small>Vence dia ${esc(c.dueDay||'-')} • Saldo ${money(t.balance)}</small></button>`;}).join('')}</div>`;
+    return `<div class="card-account-grid">${state.cards.map(c=>{const prev=state.selectedCardId; const t=totals(state.selectedMonthKey,c.id); return `<button class="account-card ${prev===c.id?'active':''}" data-card-detail="${esc(c.id)}"><span>💳</span><strong>${esc(c.bank||'Conta')} • ${esc(c.name||'Principal')}</strong><small>Vence dia ${esc(c.dueDay||'-')} • Saldo ${money(t.balance)}</small></button>`;}).join('')}</div>`;
   }
   function renderCardsManager(){
     title('Cartões e contas','Escolha uma conta para filtrar todo o app ou clique para ver o resumo.');
@@ -569,9 +623,9 @@
     keys.forEach((k,i)=>{const bw=(c.clientWidth-40)/keys.length-10,x=20+i*((c.clientWidth-40)/keys.length),bh=(vals[i]/max)*(c.clientHeight-54);ctx.fillStyle='#7c3aed';ctx.beginPath();ctx.roundRect?ctx.roundRect(x,c.clientHeight-32-bh,bw,bh,8):ctx.rect(x,c.clientHeight-32-bh,bw,bh);ctx.fill();ctx.fillStyle=getComputedStyle(document.body).getPropertyValue('--muted');ctx.font='11px Inter';ctx.textAlign='center';ctx.fillText(monthLabel(k).split(' ')[0],x+bw/2,c.clientHeight-10);});
   }
   function openModal(titleText,body,eyebrow='Cadastro'){
-    $('#modalTitle').textContent=titleText; $('#modalEyebrow').textContent=eyebrow; $('#modalBody').innerHTML=body; $('#modalRoot').classList.remove('hidden'); $('#closeModalBtn').onclick=closeModal; $('#modalRoot .modal-backdrop').onclick=closeModal; bindMoneyInputs($('#modalBody')); applyNoPasswordManager($('#modalBody')); enhanceSelects($('#modalBody'));
+    $('#modalTitle').textContent=titleText; $('#modalEyebrow').textContent=eyebrow; $('#modalBody').innerHTML=body; $('#modalRoot').classList.remove('hidden'); document.body.classList.add('modal-open'); $('#closeModalBtn').onclick=closeModal; $('#modalRoot .modal-backdrop').onclick=closeModal; bindMoneyInputs($('#modalBody')); applyNoPasswordManager($('#modalBody')); enhanceSelects($('#modalBody'));
   }
-  function closeModal(){ $('#modalRoot').classList.add('hidden'); $('#modalBody').innerHTML='';}
+  function closeModal(){ $('#modalRoot').classList.add('hidden'); $('#modalBody').innerHTML=''; document.body.classList.remove('modal-open');}
   function showToast(message, type='success') {
     let toast = document.getElementById('appToast');
     if(!toast){
@@ -603,12 +657,12 @@
     const tx=editData?.item||{};
     const currentMonth=editData?.month||state.selectedMonthKey;
     const titleText=isEdit?(isIn?'Editar receita':'Editar despesa'):(isIn?'Adicionar receita':'Adicionar despesa');
-    openModal(titleText,`<div class="form-grid"><div class="field"><label>Data</label><input id="fDate" type="date" value="${esc(tx.date||today())}"></div><div class="field"><label>Descrição</label><input id="fDesc" value="${esc(tx.description||'')}" placeholder="Ex.: Mercado, salário, pix..."></div><div class="field"><label>Valor</label><input id="fAmount" value="${tx.amount?money(tx.amount):''}" placeholder="R$ 0,00" inputmode="numeric" data-money="brl"></div><div class="field"><label>Categoria</label><select id="fCat">${categoryOptions(tx.category||'')}</select></div><div class="field"><label>Conta/cartão</label><select id="fAccount">${cardOptions(tx.accountId||state.selectedCardId,false)}</select></div><div class="field"><label>Vincular a devedor / empresa</label><select id="fCounterparty">${counterpartyOptions(tx.counterpartyId||'')}</select></div><div class="field"><label>Status</label><select id="fStatus">${statusOptions(isIn?'income':'expense',tx.status||(isIn?'received':'paid'))}</select></div><div class="field"><label>Observação / origem</label><textarea id="fNote" rows="3" placeholder="Ex.: combinado pelo WhatsApp, parcela 1, pagamento de cliente...">${esc(tx.note||'')}</textarea></div><div class="modal-actions"><button id="saveTx" class="btn primary">${isEdit?'Salvar alterações':'Salvar'}</button>${isEdit?`<button id="deleteTxFromEdit" class="btn danger" type="button">Excluir</button>`:''}</div></div>`);
+    openModal(titleText,`<div class="form-grid"><div class="field"><label>Data</label><input id="fDate" type="date" value="${esc(tx.date||defaultDateForMonth(state.selectedMonthKey))}"></div><div class="field"><label>Descrição</label><input id="fDesc" value="${esc(tx.description||'')}" placeholder="Ex.: Mercado, salário, pix..."></div><div class="field"><label>Valor</label><input id="fAmount" value="${tx.amount?money(tx.amount):''}" placeholder="R$ 0,00" inputmode="numeric" data-money="brl"></div><div class="field"><label>Categoria</label><select id="fCat">${categoryOptions(tx.category||'')}</select></div><div class="field"><label>Conta/cartão</label><select id="fAccount">${cardOptions(tx.accountId||state.selectedCardId,false)}</select></div><div class="field"><label>Vincular a devedor / empresa</label><select id="fCounterparty">${counterpartyOptions(tx.counterpartyId||'')}</select></div><div class="field"><label>Status</label><select id="fStatus">${statusOptions(isIn?'income':'expense',tx.status||(isIn?'received':'paid'))}</select></div><div class="field"><label>Observação / origem</label><textarea id="fNote" rows="3" placeholder="Ex.: combinado pelo WhatsApp, parcela 1, pagamento de cliente...">${esc(tx.note||'')}</textarea></div><div class="modal-actions"><button id="saveTx" class="btn primary">${isEdit?'Salvar alterações':'Salvar'}</button>${isEdit?`<button id="deleteTxFromEdit" class="btn danger" type="button">Excluir</button>`:''}</div></div>`);
     $('#saveTx').onclick=()=>{
       const k=$('#fDate').value.slice(0,7)||state.selectedMonthKey;
       if(!assertMonthOpen(k)) return;
       ensureMonth(k);
-      const item={...(isEdit?tx:{}),id:isEdit?tx.id:uid(),date:$('#fDate').value||today(),description:$('#fDesc').value|| (isIn?'Receita':'Despesa'),amount:parseMoney($('#fAmount').value),category:$('#fCat').value,status:$('#fStatus').value||(isIn?'received':'paid'),method:'Carteira',accountId:$('#fAccount').value||state.selectedCardId||'',counterpartyId:$('#fCounterparty').value||'',note:$('#fNote').value.trim()};
+      const item={...(isEdit?tx:{}),id:isEdit?tx.id:uid(),date:$('#fDate').value||defaultDateForMonth(state.selectedMonthKey),description:$('#fDesc').value|| (isIn?'Receita':'Despesa'),amount:parseMoney($('#fAmount').value),category:$('#fCat').value,status:$('#fStatus').value||(isIn?'received':'paid'),method:'Carteira',accountId:$('#fAccount').value||state.selectedCardId||'',counterpartyId:$('#fCounterparty').value||'',note:$('#fNote').value.trim()};
       if(item.amount<=0)return alert('Digite um valor maior que zero.');
       const listName=isIn?'incomes':'outflows';
       if(isEdit){
@@ -634,7 +688,7 @@
   }
   function openCardForm(){
     openModal('Conta / cartão',`<div class="form-grid two"><div class="field"><label>Banco / nome da conta</label><input id="cardBank" placeholder="Nubank, Bradesco, Carteira..."></div><div class="field"><label>Apelido</label><input id="cardName" placeholder="Principal"></div><div class="field"><label>Saldo inicial dessa conta</label><input id="cardOpening" placeholder="R$ 0,00" inputmode="numeric" data-money="brl"></div><div class="field"><label>Vence dia</label><input id="cardDue" type="number" value="10"></div><div class="field"><label>Compra do mês nessa conta/cartão</label><input id="cardPurchase" placeholder="R$ 0,00" inputmode="numeric" data-money="brl"></div><div class="field"><label>Descrição da compra</label><input id="cardDesc" placeholder="Compra no cartão"></div><div class="field"><label>Parcelas</label><input id="cardParc" type="number" value="1"></div><button id="saveCard" class="btn primary">Salvar conta/cartão</button></div>`);
-    $('#saveCard').onclick=()=>{let card=state.cards.find(c=>(c.bank||'').toLowerCase()===$('#cardBank').value.toLowerCase()&&(c.name||'').toLowerCase()===$('#cardName').value.toLowerCase()); if(!card){card={id:uid(),bank:$('#cardBank').value||'Conta',name:$('#cardName').value||'Principal',dueDay:Number($('#cardDue').value||10),closingDay:25,openingBalance:parseMoney($('#cardOpening').value),color:'#7c3aed'}; state.cards.push(card);} else {card.openingBalance=parseMoney($('#cardOpening').value)||Number(card.openingBalance||0); card.dueDay=Number($('#cardDue').value||card.dueDay||10);} const amount=parseMoney($('#cardPurchase').value); if(amount>0){const m=ensureMonth(); m.cardPurchases.push({id:uid(),cardId:card.id,purchaseDate:today(),description:$('#cardDesc').value||'Compra no cartão',totalAmount:amount,installmentCount:Math.max(1,Number($('#cardParc').value||1)),category:'Cartão'});} state.selectedCardId=card.id; closeModal(); save(); render();};
+    $('#saveCard').onclick=()=>{let card=state.cards.find(c=>(c.bank||'').toLowerCase()===$('#cardBank').value.toLowerCase()&&(c.name||'').toLowerCase()===$('#cardName').value.toLowerCase()); if(!card){card={id:uid(),bank:$('#cardBank').value||'Conta',name:$('#cardName').value||'Principal',dueDay:Number($('#cardDue').value||10),closingDay:25,openingBalance:parseMoney($('#cardOpening').value),color:'#7c3aed'}; state.cards.push(card);} else {card.openingBalance=parseMoney($('#cardOpening').value)||Number(card.openingBalance||0); card.dueDay=Number($('#cardDue').value||card.dueDay||10);} const amount=parseMoney($('#cardPurchase').value); if(amount>0){const m=ensureMonth(); m.cardPurchases.push({id:uid(),cardId:card.id,purchaseDate:defaultDateForMonth(state.selectedMonthKey),description:$('#cardDesc').value||'Compra no cartão',totalAmount:amount,installmentCount:Math.max(1,Number($('#cardParc').value||1)),category:'Cartão'});} state.selectedCardId=card.id; closeModal(); save(); render();};
   }
   function openCounterpartyForm(){
     openModal('Devedor / empresa',`<div class="form-grid"><div class="field"><label>Nome</label><input id="cpName" placeholder="Ex.: João, Cliente, Empresa"></div><div class="field"><label>Observação</label><input id="cpNote" placeholder="Ex.: Me deve / Eu devo"></div><button id="saveCp" class="btn primary">Salvar devedor</button></div>`);
@@ -644,13 +698,13 @@
 
   function openCardPurchaseEditForm(p, originMonth){
     if(!p)return;
-    openModal('Editar compra no cartão',`<div class="form-grid two"><div class="field"><label>Data da compra</label><input id="editCardDate" type="date" value="${esc(p.purchaseDate||today())}"></div><div class="field"><label>Descrição</label><input id="editCardDesc" value="${esc(p.description||'Compra no cartão')}"></div><div class="field"><label>Valor total</label><input id="editCardAmount" value="${money(p.totalAmount||0)}" inputmode="numeric" data-money="brl"></div><div class="field"><label>Parcelas</label><input id="editCardParc" type="number" value="${esc(p.installmentCount||1)}"></div><div class="field"><label>Conta/cartão</label><select id="editCardId">${cardOptions(p.cardId||p.accountId||state.selectedCardId,false)}</select></div><div class="field"><label>Categoria</label><select id="editCardCat">${categoryOptions(p.category||'Cartão')}</select></div><div class="field"><label>Vincular a devedor / empresa</label><select id="editCardCounterparty">${counterpartyOptions(p.counterpartyId||'')}</select></div><div class="field"><label>Status</label><select id="editCardStatus"><option value="paid" ${p.status==='paid'?'selected':''}>Pago</option><option value="pending" ${p.status==='pending'?'selected':''}>Pendente</option><option value="not_paid" ${p.status==='not_paid'?'selected':''}>Não pago</option></select></div><div class="field" style="grid-column:1/-1"><label>Observação</label><textarea id="editCardNote" rows="3">${esc(p.note||'')}</textarea></div><div class="modal-actions" style="grid-column:1/-1"><button id="saveCardPurchase" class="btn primary">Salvar alterações</button><button id="deleteCardPurchase" class="btn danger" type="button">Excluir</button></div></div>`,'Compra no cartão');
+    openModal('Editar compra no cartão',`<div class="form-grid two"><div class="field"><label>Data da compra</label><input id="editCardDate" type="date" value="${esc(p.purchaseDate||defaultDateForMonth(state.selectedMonthKey))}"></div><div class="field"><label>Descrição</label><input id="editCardDesc" value="${esc(p.description||'Compra no cartão')}"></div><div class="field"><label>Valor total</label><input id="editCardAmount" value="${money(p.totalAmount||0)}" inputmode="numeric" data-money="brl"></div><div class="field"><label>Parcelas</label><input id="editCardParc" type="number" value="${esc(p.installmentCount||1)}"></div><div class="field"><label>Conta/cartão</label><select id="editCardId">${cardOptions(p.cardId||p.accountId||state.selectedCardId,false)}</select></div><div class="field"><label>Categoria</label><select id="editCardCat">${categoryOptions(p.category||'Cartão')}</select></div><div class="field"><label>Vincular a devedor / empresa</label><select id="editCardCounterparty">${counterpartyOptions(p.counterpartyId||'')}</select></div><div class="field"><label>Status</label><select id="editCardStatus"><option value="paid" ${p.status==='paid'?'selected':''}>Pago</option><option value="pending" ${p.status==='pending'?'selected':''}>Pendente</option><option value="not_paid" ${p.status==='not_paid'?'selected':''}>Não pago</option></select></div><div class="field" style="grid-column:1/-1"><label>Observação</label><textarea id="editCardNote" rows="3">${esc(p.note||'')}</textarea></div><div class="modal-actions" style="grid-column:1/-1"><button id="saveCardPurchase" class="btn primary">Salvar alterações</button><button id="deleteCardPurchase" class="btn danger" type="button">Excluir</button></div></div>`,'Compra no cartão');
     $('#saveCardPurchase').onclick=()=>{
       const newMonth=($('#editCardDate').value||today()).slice(0,7);
       ensureMonth(newMonth);
       const oldM=ensureMonth(originMonth||state.selectedMonthKey);
       const cardId=$('#editCardId').value||state.selectedCardId||'';
-      const updated={...p,id:p.id,purchaseDate:$('#editCardDate').value||today(),description:$('#editCardDesc').value||'Compra no cartão',totalAmount:parseMoney($('#editCardAmount').value),installmentCount:Math.max(1,Number($('#editCardParc').value||1)),cardId,accountId:cardId,category:$('#editCardCat').value||'Cartão',status:$('#editCardStatus').value||'paid',counterpartyId:$('#editCardCounterparty').value||'',note:$('#editCardNote').value.trim()};
+      const updated={...p,id:p.id,purchaseDate:$('#editCardDate').value||defaultDateForMonth(state.selectedMonthKey),description:$('#editCardDesc').value||'Compra no cartão',totalAmount:parseMoney($('#editCardAmount').value),installmentCount:Math.max(1,Number($('#editCardParc').value||1)),cardId,accountId:cardId,category:$('#editCardCat').value||'Cartão',status:$('#editCardStatus').value||'paid',counterpartyId:$('#editCardCounterparty').value||'',note:$('#editCardNote').value.trim()};
       if((originMonth||state.selectedMonthKey)===newMonth){
         const idx=(oldM.cardPurchases||[]).findIndex(x=>x.id===p.id);
         if(idx>=0) oldM.cardPurchases[idx]=updated; else state.months[newMonth].cardPurchases.push(updated);
@@ -669,7 +723,7 @@
     const checkMonth=source==='card'?(found.originMonth||month||state.selectedMonthKey):(month||state.selectedMonthKey);
     if(!assertMonthOpen(checkMonth)) return;
     const label=x.description||found.type||'lançamento';
-    if(!confirm(`Excluir "${label}"? Essa ação não pode ser desfeita.`))return;
+    if(!confirm(`Tem certeza que deseja excluir a transação "${label}"? Essa ação não pode ser desfeita.`))return;
     const targetMonth=month||found.originMonth||state.selectedMonthKey;
     const m=ensureMonth(targetMonth);
     if(source==='income') m.incomes=(m.incomes||[]).filter(item=>item.id!==id);
@@ -778,11 +832,11 @@
     const baseMonth=source==='card'?(found.originMonth||month||state.selectedMonthKey):(month||state.selectedMonthKey);
     if(!assertMonthOpen(state.selectedMonthKey)) return;
     if(source==='card'){
-      const copy={...x,id:uid(),purchaseDate:today(),description:(x.description||'Compra')+' (cópia)'};
+      const copy={...x,id:uid(),purchaseDate:defaultDateForMonth(state.selectedMonthKey),description:(x.description||'Compra')+' (cópia)'};
       ensureMonth(state.selectedMonthKey).cardPurchases.push(copy);
     }else{
       const isIn=source==='income';
-      const copy={...x,id:uid(),date:today(),description:(x.description||(isIn?'Receita':'Despesa'))+' (cópia)'};
+      const copy={...x,id:uid(),date:defaultDateForMonth(state.selectedMonthKey),description:(x.description||(isIn?'Receita':'Despesa'))+' (cópia)'};
       ensureMonth(state.selectedMonthKey)[isIn?'incomes':'outflows'].push(copy);
     }
     closeModal(); save(); render();
@@ -859,6 +913,92 @@
   async function logout(){ if(confirm('Sair da conta?')){ try{ if(BOOT.logout) await BOOT.logout(); }catch{} location.href='index.html';}}
   function toggleFab(){const open=$('#fabMenu').classList.contains('hidden'); $('#fabMenu').classList.toggle('hidden',!open); $('#fabBackdrop').classList.toggle('hidden',!open); $('#fabBtn').classList.toggle('open',open);}
   function closeFab(){$('#fabMenu').classList.add('hidden');$('#fabBackdrop').classList.add('hidden');$('#fabBtn').classList.remove('open');}
+  function resetSwipeRow(row){
+    if(!row) return;
+    row.style.setProperty('--swipe-x','0px');
+    row.style.setProperty('--swipe-progress','0');
+    row.classList.remove('swiping','ready-delete');
+  }
+  function bindSwipeDeleteRows(root=document){
+    $$('.swipe-delete-row[data-tx-id]', root).forEach(row=>{
+      if(row.dataset.swipeBound==='1') return;
+      row.dataset.swipeBound='1';
+      let startX=0,startY=0,dx=0,dy=0,dragging=false,active=false,pointerId=null,moved=false;
+      const threshold=72;
+      const maxDrag=118;
+      const getX=e=> e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX ?? e.clientX ?? 0;
+      const getY=e=> e.touches?.[0]?.clientY ?? e.changedTouches?.[0]?.clientY ?? e.clientY ?? 0;
+      function startDrag(e){
+        if(e.type==='pointerdown' && e.button && e.button!==0) return;
+        if(e.target.closest('button,input,select,textarea,a,.app-dropdown,.custom-select-wrap')) return;
+        startX=getX(e); startY=getY(e); dx=0; dy=0; dragging=true; active=false; moved=false; pointerId=e.pointerId ?? null;
+        row.classList.add('swiping');
+        row.style.willChange='transform';
+        try{ if(pointerId!==null) row.setPointerCapture(pointerId); }catch{}
+      }
+      function moveDrag(e){
+        if(!dragging) return;
+        dx=getX(e)-startX; dy=getY(e)-startY;
+        if(Math.abs(dx)<6 && Math.abs(dy)<6) return;
+        moved=true;
+        if(!active && Math.abs(dy)>Math.abs(dx)*1.18){ dragging=false; resetSwipeRow(row); return; }
+        if(dx<0 && Math.abs(dx)>8){
+          active=true;
+          if(e.cancelable) e.preventDefault();
+          const drag=Math.max(-maxDrag,dx);
+          const progress=Math.min(1,Math.abs(drag)/threshold);
+          row.style.setProperty('--swipe-x',`${drag}px`);
+          row.style.setProperty('--swipe-progress',String(progress));
+          row.classList.toggle('ready-delete',Math.abs(drag)>=threshold);
+        }else if(active && dx>=0){
+          resetSwipeRow(row);
+        }
+      }
+      function finishDrag(e){
+        if(!dragging && !active) return;
+        const shouldDelete=active && Math.abs(dx)>=threshold;
+        dragging=false;
+        if(shouldDelete){
+          row.dataset.justSwiped='1';
+          setTimeout(()=>{row.dataset.justSwiped='';},700);
+          const source=row.dataset.txSource;
+          const id=row.dataset.txId;
+          const month=row.dataset.txMonth;
+          const found=findTransaction(source,id,month);
+          const label=found?.item?.description || row.dataset.txTitle || 'transação';
+          row.style.setProperty('--swipe-x',`-${maxDrag}px`);
+          row.style.setProperty('--swipe-progress','1');
+          row.classList.add('ready-delete');
+          setTimeout(()=>{
+            if(confirm(`Tem certeza que deseja excluir a transação "${label}"?`)){
+              deleteTransaction(source,id,month,false);
+            }else{
+              resetSwipeRow(row);
+            }
+          }, 90);
+        }else{
+          resetSwipeRow(row);
+        }
+        row.style.willChange='';
+        try{ if(pointerId!==null && row.releasePointerCapture) row.releasePointerCapture(pointerId); }catch{}
+      }
+      row.addEventListener('pointerdown',startDrag, {passive:true});
+      row.addEventListener('pointermove',moveDrag, {passive:false});
+      row.addEventListener('pointerup',finishDrag, {passive:true});
+      row.addEventListener('pointercancel',()=>{dragging=false; active=false; resetSwipeRow(row);}, {passive:true});
+      row.addEventListener('touchstart',startDrag, {passive:true});
+      row.addEventListener('touchmove',moveDrag, {passive:false});
+      row.addEventListener('touchend',finishDrag, {passive:true});
+      row.addEventListener('touchcancel',()=>{dragging=false; active=false; resetSwipeRow(row);}, {passive:true});
+      row.addEventListener('click',(e)=>{
+        if(row.dataset.justSwiped==='1' || moved){
+          e.preventDefault();
+          e.stopPropagation();
+          moved=false;
+        }
+      }, true);
+    });
+  }
   function boot(){
     ensureMonth();
     applyRecurringToMonth(state.selectedMonthKey,false);
@@ -902,7 +1042,10 @@
       const cp=e.target.closest('[data-cp-open]');
       if(cp){e.preventDefault();e.stopPropagation(); openCounterpartyDetail(cp.dataset.cpOpen); return;}
       const tx=e.target.closest('[data-tx-id]');
-      if(tx){e.preventDefault();openTransactionDetail(tx.dataset.txSource,tx.dataset.txId,tx.dataset.txMonth);}
+      if(tx){
+        if(tx.dataset.justSwiped==='1') { e.preventDefault(); e.stopPropagation(); return; }
+        e.preventDefault();openTransactionDetail(tx.dataset.txSource,tx.dataset.txId,tx.dataset.txMonth);
+      }
     });
     $$('.seg-tab,.bottom-item,.rail-btn[data-screen]').forEach(b=>b.onclick=()=>setScreen(b.dataset.screen));
     $('#prevMonthBtn').onclick=()=>{state.selectedMonthKey=shiftMonth(state.selectedMonthKey,-1);ensureMonth();applyRecurringToMonth(state.selectedMonthKey,true);save();render();};

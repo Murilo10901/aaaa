@@ -87,3 +87,323 @@ body.theme-light{--brand:#0f766e;--brand-2:#0b5f57;--brand-3:#14b8a6;--purple:va
   .card-modal-actions .btn{width:100%;justify-content:center;}
   .app-toast{bottom:18px;border-radius:16px;font-size:13px;}
 }
+
+/* ===== Atualização: swipe para excluir + mobile mais confortável ===== */
+.swipe-delete-row{
+  --swipe-x:0px;
+  --swipe-progress:0;
+  position:relative;
+  overflow:hidden;
+  border-radius:18px;
+  touch-action:pan-y;
+  user-select:none;
+  -webkit-user-select:none;
+  transition:background .18s ease;
+}
+.swipe-delete-row > :not(.swipe-delete-bg){
+  position:relative;
+  z-index:2;
+  transform:translateX(var(--swipe-x));
+  transition:transform .18s ease;
+}
+.swipe-delete-row.swiping > :not(.swipe-delete-bg){transition:none}
+.swipe-delete-bg{
+  position:absolute;
+  inset:0 0 0 auto;
+  width:160px;
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  padding-right:22px;
+  color:#fff;
+  font-weight:900;
+  letter-spacing:.02em;
+  background:linear-gradient(90deg,rgba(239,68,68,0),rgba(220,38,38,.92));
+  opacity:var(--swipe-progress);
+  z-index:1;
+  pointer-events:none;
+}
+.swipe-delete-row.ready-delete .swipe-delete-bg{
+  background:linear-gradient(90deg,rgba(239,68,68,0),rgba(185,28,28,1));
+}
+.swipe-delete-row.ready-delete{
+  box-shadow:inset -4px 0 0 rgba(248,113,113,.9);
+}
+.transaction-list .swipe-delete-row{
+  padding-left:0;
+  padding-right:0;
+}
+.transaction-list .swipe-delete-row .tx-ico{margin-left:0}
+
+/* deixa o app menos “zoomado” em celulares menores sem prejudicar iPad */
+@media(max-width:520px){
+  :root{--bar-h:78px}
+  html{font-size:14px}
+  .phone-stage{padding:10px 10px calc(var(--bar-h) + 12px)}
+  .app-topbar{min-height:44px;margin-bottom:8px}
+  .icon-btn,.month-arrow{width:38px;height:38px;border-radius:14px}
+  .brand-mini strong{font-size:.9rem}
+  .segmented-tabs{margin-bottom:10px;gap:3px;padding:4px}
+  .seg-tab{padding:9px 12px;font-size:.86rem}
+  .month-strip{gap:6px;margin-bottom:12px;grid-template-columns:38px minmax(0,1fr) 38px}
+  .month-pill{padding:9px 12px;font-size:.92rem}
+  .month-pill small{font-size:10px}
+  .screen-title{margin-bottom:8px}
+  .screen-title h1{font-size:1.42rem;letter-spacing:-.02em}
+  .screen-title p{font-size:.9rem;line-height:1.35}
+  .panel{padding:13px;margin-bottom:12px;border-radius:20px}
+  .hero-card{padding:15px;margin-bottom:12px}
+  .balance-value{font-size:2rem;letter-spacing:-.045em}
+  .mini-kpi{padding:11px;border-radius:16px}
+  .quick-card{min-height:72px;padding:11px;border-radius:18px}
+  .quick-card i{width:31px;height:31px;border-radius:11px}
+  .account-strip{padding:11px;margin-bottom:12px;border-radius:20px}
+  .account-chip{min-width:116px;padding:10px;border-radius:16px}
+  .account-chip span{width:27px;height:27px;border-radius:10px}
+  .tx-row{gap:8px;padding:10px 0;border-radius:16px}
+  .tx-ico{width:36px;height:36px;font-size:.86rem}
+  .tx-main strong{font-size:.92rem;line-height:1.18}
+  .tx-main small{font-size:.78rem;line-height:1.25}
+  .tx-value{font-size:.9rem}
+  .day-title{font-size:.82rem;margin:8px 0 4px}
+  .btn{padding:11px 12px;border-radius:14px;font-size:.9rem}
+  .bottom-nav{height:var(--bar-h)}
+  .bottom-item span{font-size:18px}.bottom-item small{font-size:10px}
+  .fab-btn{width:52px;height:52px;font-size:34px}
+  .fake-card{height:148px;padding:16px;border-radius:22px}
+  .card-number{font-size:1rem}
+}
+@media(max-width:380px){
+  html{font-size:13.25px}
+  .phone-stage{padding-left:8px;padding-right:8px}
+  .screen-title h1{font-size:1.32rem}
+  .balance-value{font-size:1.82rem}
+  .quick-grid{gap:8px}
+  .panel{padding:12px;border-radius:18px}
+  .account-chip{min-width:108px}
+  .tx-ico{width:34px;height:34px}
+  .modal-card{padding:15px}
+}
+
+/* ===== Saldo encadeado: kpis da tela de transações ===== */
+.balance-subgrid-3{grid-template-columns:repeat(3,1fr)}
+.saldo-rule-note{margin-top:10px;font-size:12px;line-height:1.45}
+@media(max-width:760px){.balance-subgrid-3{grid-template-columns:1fr}}
+
+/* ===== Correção mobile para modais/formulários ===== */
+body.modal-open{
+  overflow:hidden;
+  touch-action:none;
+}
+#modalRoot.modal{
+  overflow:hidden;
+}
+.modal-card{
+  overflow-x:hidden;
+}
+#modalBody,
+#modalBody *{
+  max-width:100%;
+}
+#modalBody .form-grid,
+#modalBody .form-grid.two{
+  width:100%;
+  min-width:0;
+}
+#modalBody .field,
+#modalBody .modal-actions{
+  min-width:0;
+}
+#modalBody input,
+#modalBody textarea,
+#modalBody select,
+#modalBody .app-dropdown,
+#modalBody .app-dropdown-trigger,
+#modalBody .custom-select-wrap,
+#modalBody .custom-select-trigger{
+  min-width:0;
+  max-width:100%;
+}
+
+@media(max-width:640px){
+  .modal{
+    align-items:center !important;
+    justify-content:center !important;
+    padding:14px !important;
+    width:100vw;
+    height:100dvh;
+    max-width:100vw;
+    overflow:hidden;
+  }
+  .modal-card{
+    width:100% !important;
+    max-width:calc(100vw - 28px) !important;
+    max-height:calc(100dvh - 28px) !important;
+    border-radius:24px !important;
+    padding:14px !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+    margin:0 auto;
+  }
+  .modal-header{
+    position:sticky;
+    top:-14px;
+    z-index:5;
+    background:linear-gradient(180deg,var(--surface) 72%,rgba(0,0,0,0));
+    padding:4px 0 12px;
+    align-items:flex-start;
+  }
+  #modalTitle{
+    font-size:1.55rem;
+    line-height:1.12;
+    letter-spacing:-.03em;
+  }
+  #modalEyebrow{
+    font-size:10px;
+    letter-spacing:.18em;
+  }
+  #closeModalBtn{
+    width:44px;
+    height:44px;
+    min-width:44px;
+    border-radius:16px;
+    font-size:18px;
+  }
+  #modalBody .form-grid,
+  #modalBody .form-grid.two{
+    display:grid !important;
+    grid-template-columns:1fr !important;
+    gap:10px !important;
+  }
+  #modalBody .field label{
+    font-size:12px;
+    margin-bottom:6px;
+  }
+  #modalBody input,
+  #modalBody textarea,
+  #modalBody select,
+  #modalBody .app-dropdown-trigger,
+  #modalBody .custom-select-trigger{
+    min-height:46px;
+    font-size:16px !important;
+    line-height:1.2;
+    padding:11px 12px !important;
+    border-radius:14px !important;
+  }
+  #modalBody textarea{
+    min-height:82px;
+  }
+  #modalBody .modal-actions{
+    display:grid !important;
+    grid-template-columns:1fr !important;
+    gap:10px !important;
+    margin-top:8px;
+  }
+  #modalBody .modal-actions .btn,
+  #modalBody .btn.primary,
+  #modalBody .btn.soft,
+  #modalBody .btn.danger{
+    width:100%;
+    min-height:46px;
+    padding:12px 14px !important;
+    font-size:15px;
+  }
+  #modalBody .app-dropdown-menu,
+  #modalBody .custom-select-menu{
+    left:14px !important;
+    right:14px !important;
+    bottom:18px !important;
+    max-height:52dvh !important;
+    max-width:calc(100vw - 28px) !important;
+  }
+}
+
+@media(max-width:380px){
+  .modal{padding:10px !important;}
+  .modal-card{max-width:calc(100vw - 20px) !important;max-height:calc(100dvh - 20px) !important;padding:12px !important;border-radius:22px !important;}
+  #modalTitle{font-size:1.42rem;}
+  #closeModalBtn{width:40px;height:40px;min-width:40px;}
+  #modalBody input,#modalBody textarea,#modalBody select,#modalBody .app-dropdown-trigger,#modalBody .custom-select-trigger{min-height:44px;padding:10px 11px !important;}
+}
+
+/* ===== Hotfix mobile: modal sem scroll lateral + botões dentro da caixa ===== */
+html, body, .app-shell, .phone-stage, .app-content, .panel, .modal, .modal-card{
+  max-width:100vw;
+  overflow-x:hidden;
+}
+.modal{
+  left:0!important;
+  right:0!important;
+  width:100dvw!important;
+  max-width:100dvw!important;
+  padding-left:max(12px, env(safe-area-inset-left))!important;
+  padding-right:max(12px, env(safe-area-inset-right))!important;
+}
+.modal-card{
+  width:min(620px, calc(100dvw - 24px))!important;
+  max-width:calc(100dvw - 24px)!important;
+  margin-left:auto!important;
+  margin-right:auto!important;
+  transform:none!important;
+  contain:layout paint;
+}
+#modalBody{width:100%;overflow-x:hidden;}
+#modalBody .form-grid,#modalBody .field,#modalBody input,#modalBody textarea,#modalBody select{max-width:100%;min-width:0;}
+@media(max-width:900px){
+  .modal{align-items:center!important;justify-content:center!important;height:100dvh!important;overflow:hidden!important;}
+  .modal-card{width:calc(100dvw - 24px)!important;max-width:calc(100dvw - 24px)!important;max-height:calc(100dvh - 24px)!important;border-radius:24px!important;padding:14px!important;overflow-y:auto!important;overflow-x:hidden!important;}
+  .modal-header{display:grid!important;grid-template-columns:minmax(0,1fr) 46px;gap:10px;align-items:start;}
+  #modalTitle{font-size:clamp(1.28rem,6vw,1.65rem)!important;line-height:1.1!important;letter-spacing:-.03em!important;word-break:normal;overflow-wrap:anywhere;}
+  #modalEyebrow{font-size:10px!important;}
+  #closeModalBtn{width:44px!important;height:44px!important;min-width:44px!important;}
+  #modalBody .form-grid,#modalBody .form-grid.two{grid-template-columns:1fr!important;gap:10px!important;}
+  #modalBody input,#modalBody textarea,#modalBody select,#modalBody .app-dropdown-trigger,#modalBody .custom-select-trigger{font-size:16px!important;min-height:44px!important;padding:10px 12px!important;border-radius:14px!important;}
+  #modalBody .field label{font-size:12px!important;margin-bottom:5px!important;}
+}
+@media(max-width:560px){
+  .panel-head{display:grid!important;grid-template-columns:1fr!important;gap:12px!important;align-items:stretch!important;}
+  .panel-head > div{min-width:0;}
+  .panel-head h2{font-size:1.45rem;line-height:1.1;}
+  .actions-row{width:100%!important;display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;align-items:stretch!important;justify-content:stretch!important;}
+  .actions-row .btn{width:100%!important;min-width:0!important;white-space:nowrap!important;padding:11px 8px!important;font-size:.9rem!important;}
+  .actions-row .btn:first-child{grid-column:1 / -1;}
+  .transaction-toolbar{grid-template-columns:1fr!important;}
+  .transaction-list{overflow-x:hidden;}
+}
+@media(max-width:390px){
+  .modal{padding-left:8px!important;padding-right:8px!important;}
+  .modal-card{width:calc(100dvw - 16px)!important;max-width:calc(100dvw - 16px)!important;border-radius:22px!important;padding:12px!important;}
+  #modalTitle{font-size:1.25rem!important;}
+}
+
+/* ===== Hotfix swipe-to-delete robusto no mobile/iOS ===== */
+.swipe-delete-row{
+  position:relative;
+  overflow:hidden;
+  touch-action:pan-y;
+  user-select:none;
+  -webkit-user-select:none;
+  border-radius:18px;
+  transform:translate3d(var(--swipe-x,0px),0,0);
+  transition:transform .18s ease, box-shadow .18s ease;
+}
+.swipe-delete-row.swiping{transition:none;}
+.swipe-delete-row .swipe-delete-bg{
+  position:absolute;
+  inset:0 0 0 auto;
+  width:136px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  font-weight:900;
+  background:linear-gradient(90deg,rgba(239,68,68,.10),rgba(220,38,38,.96));
+  transform:translateX(calc(100% + var(--swipe-x,0px) * -1));
+  opacity:var(--swipe-progress,0);
+  pointer-events:none;
+  z-index:0;
+}
+.swipe-delete-row > :not(.swipe-delete-bg){position:relative;z-index:1;}
+.swipe-delete-row.ready-delete{box-shadow:inset -5px 0 0 rgba(248,113,113,.95);}
